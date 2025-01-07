@@ -1,92 +1,225 @@
-import { describe, expect, test, beforeAll, afterAll } from 'vitest';
-import { P2PAuctionCoordinator } from '../../src/p2p/coordinator';
-import { Provider, Account, Contract } from 'starknet';
-import { mockLibp2pNode } from '../mocks/libp2p';
-import { getTestProvider } from '../utils/starknet';
+import { createLibp2p } from 'libp2p';
+import { noise } from '@chainsafe/libp2p-noise';
+import { yamux } from '@chainsafe/libp2p-yamux';
+import { webSockets } from '@libp2p/websockets';
+import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { starknet } from 'starknet';
+import { Buffer } from 'buffer';
 
-describe('P2P Auction Coordinator', () => {
-    let provider: Provider;
-    let coordinator1: P2PAuctionCoordinator;
-    let coordinator2: P2PAuctionCoordinator;
-    let auctionContract: Contract;
-    let tokenContract: Contract;
-    let nftContract: Contract;
+export class P2PAuctionCoordinator {
+    private libp2p: any;
+    private topic: string;
+    private currentAuction: any;
+    private bids: Map<string, any>;
+    private provider: any;
 
-    beforeAll(async () => {
-        // Get provider from snforge test environment
-        provider = await getTestProvider();
-        
-        // Deploy test contracts using Scarb
-        const result = await deployTestContracts(provider);
-        auctionContract = result.auctionContract;
-        tokenContract = result.tokenContract;
-        nftContract = result.nftContract;
+    constructor(
+        private contractAddress: string,
+        private chainId: string,
+        private rpcUrl: string
+    ) {
+        this.bids = new Map();
+    }
 
-        // Initialize coordinators with different mock libp2p nodes
-        coordinator1 = new P2PAuctionCoordinator(
-            auctionContract.address,
-            await provider.getChainId(),
-            provider.baseUrl
-        );
-        coordinator1.setLibp2pNode(await mockLibp2pNode('peer1'));
+    async initialize() {
+        // Initialize libp2p node
+        this.libp2p = await createLibp2p({
+            addresses: {
+                listen: ['/dns4/wrtc-star1.par.dwebops.pub/tcp/443/wss/p2p-webrtc-star']
+            },
+            transports: [webSockets()],
+            streamMuxers: [yamux()],
+            connectionEncryption: [noise()],
+            pubsub: gossipsub({ 
+                allowPublishToZeroPeers: true,
+                emitSelf: true
+            })
+        });
 
-        coordinator2 = new P2PAuctionCoordinator(
-            auctionContract.address,
-            await provider.getChainId(),
-            provider.baseUrl
-        );
-        coordinator2.setLibp2pNode(await mockLibp2pNode('peer2'));
+        // Initialize Starknet provider
+        this.provider = new starknet.Provider({ sequencer: { baseUrl: this.rpcUrl } });
 
-        await coordinator1.initialize();
-        await coordinator2.initialize();
-    });
+        // Subscribe to auction room
+        this.topic = `auction-room-${this.contractAddress}`;
+        await this.libp2p.pubsub.subscribe(this.topic);
 
-    test('should create new auction and broadcast to peers', async () => {
-        const nftId = '1';
-        const startPrice = '1000000000000000000'; // 1 token
-        const deadline = Math.floor(Date.now() / 1000) + 3600;
+        // Handle incoming messages
+        this.libp2p.pubsub.addEventListener('message', async (message: any) => {
+            const data = JSON.parse(message.data.toString());
+            await this.handleMessage(data);
+        });
+    }
 
-        await coordinator1.createAuction(
-            nftContract.address,
+    async createAuction(
+        nftContract: string,
+        nftId: string,
+        tokenContract: string,
+        startPrice: string,
+        deadline: number
+    ) {
+        const auction = {
+            type: 'NEW_AUCTION',
+            auctioneer: await this.libp2p.peerId.toString(),
+            nftContract,
             nftId,
-            tokenContract.address,
+            tokenContract,
             startPrice,
-            deadline
+            deadline,
+            timestamp: Date.now()
+        };
+
+        // Sign auction data
+        const signature = await this.signAuctionData(auction);
+        auction.signature = signature;
+
+        this.currentAuction = {
+            ...auction,
+            bids: []
+        };
+
+        // Broadcast auction
+        await this.libp2p.pubsub.publish(
+            this.topic,
+            Buffer.from(JSON.stringify(auction))
+        );
+    }
+
+    async placeBid(amount: string) {
+        if (!this.currentAuction) {
+            throw new Error('No active auction');
+        }
+
+        // Check token balance and allowance first
+        const hasBalance = await this.checkTokenBalance(amount);
+        if (!hasBalance) {
+            throw new Error('Insufficient balance or allowance');
+        }
+
+        const bid = {
+            type: 'BID',
+            auctionId: this.currentAuction.auctionId,
+            bidder: await this.libp2p.peerId.toString(),
+            amount,
+            timestamp: Date.now()
+        };
+
+        // Sign bid
+        const signature = await this.signBidData(bid);
+        bid.signature = signature;
+
+        // Store bid locally
+        this.bids.set(bid.bidder, bid);
+
+        // Broadcast bid
+        await this.libp2p.pubsub.publish(
+            this.topic,
+            Buffer.from(JSON.stringify(bid))
+        );
+    }
+
+    private async handleMessage(message: any) {
+        switch (message.type) {
+            case 'NEW_AUCTION':
+                // Verify auction signature
+                if (await this.verifyAuctionSignature(message)) {
+                    this.currentAuction = {
+                        ...message,
+                        bids: []
+                    };
+                }
+                break;
+
+            case 'BID':
+                // Verify bid signature and auction match
+                if (
+                    await this.verifyBidSignature(message) &&
+                    message.auctionId === this.currentAuction?.auctionId
+                ) {
+                    // Add bid to ordered list (highest first)
+                    this.currentAuction.bids = [
+                        ...this.currentAuction.bids,
+                        message
+                    ].sort((a, b) => Number(b.amount) - Number(a.amount));
+
+                    // Store bid
+                    this.bids.set(message.bidder, message);
+                }
+                break;
+        }
+    }
+
+    private async checkTokenBalance(amount: string): Promise<boolean> {
+        try {
+            // Check balance
+            const balance = await this.provider.callContract({
+                contractAddress: this.currentAuction.tokenContract,
+                entrypoint: 'balanceOf',
+                calldata: [this.libp2p.peerId.toString()]
+            });
+
+            // Check allowance
+            const allowance = await this.provider.callContract({
+                contractAddress: this.currentAuction.tokenContract,
+                entrypoint: 'allowance',
+                calldata: [this.libp2p.peerId.toString(), this.contractAddress]
+            });
+
+            return BigInt(balance) >= BigInt(amount) && BigInt(allowance) >= BigInt(amount);
+        } catch (error) {
+            console.error('Error checking balance:', error);
+            return false;
+        }
+    }
+
+    async finalizeAuction() {
+        if (!this.currentAuction) {
+            throw new Error('No active auction');
+        }
+
+        // Sort bids by amount (highest first)
+        const sortedBids = Array.from(this.bids.values())
+            .sort((a, b) => Number(b.amount) - Number(a.amount));
+
+        // Create the auction completion message with bid chain
+        const completion = {
+            type: 'AUCTION_COMPLETE',
+            auction: this.currentAuction,
+            bids: sortedBids,
+            timestamp: Date.now()
+        };
+
+        // Sign and broadcast completion
+        const signature = await this.signAuctionCompletion(completion);
+        completion.signature = signature;
+
+        await this.libp2p.pubsub.publish(
+            this.topic,
+            Buffer.from(JSON.stringify(completion))
         );
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Reset state
+        this.currentAuction = null;
+        this.bids.clear();
+    }
 
-        const auction = coordinator2.getCurrentAuction();
-        expect(auction).toBeDefined();
-        expect(auction.nftContract).toBe(nftContract.address);
-        expect(auction.nftId).toBe(nftId);
-    });
+    // Signature methods would integrate with Starknet wallet
+    private async signAuctionData(data: any) {
+        // Implementation depends on Starknet wallet integration
+    }
 
-    // ... rest of the test cases ...
-});
+    private async signBidData(data: any) {
+        // Implementation depends on Starknet wallet integration
+    }
 
-// tests/utils/starknet.ts
-import { Provider } from 'starknet';
+    private async verifyAuctionSignature(data: any) {
+        // Implementation depends on Starknet signature verification
+    }
 
-export async function getTestProvider(): Promise<Provider> {
-    // snforge provides a local network for testing
-    return new Provider({ 
-        sequencer: { 
-            baseUrl: process.env.STARKNET_PROVIDER_BASE_URL || 'http://127.0.0.1:5050'
-        }
-    });
-}
+    private async verifyBidSignature(data: any) {
+        // Implementation depends on Starknet signature verification
+    }
 
-// tests/mocks/libp2p.ts
-export async function mockLibp2pNode(peerId: string) {
-    return {
-        peerId: {
-            toString: () => peerId
-        },
-        pubsub: {
-            subscribe: async (topic: string) => {},
-            publish: async (topic: string, data: any) => {},
-            addEventListener: (event: string, callback: (message: any) => void) => {}
-        }
-    };
+    private async signAuctionCompletion(data: any) {
+        // Implementation depends on Starknet wallet integration
+    }
 }

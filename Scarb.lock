@@ -2,7 +2,7 @@
 version = 1
 
 [[package]]
-name = "auction_house"
+name = "scarabsign"
 version = "0.1.0"
 dependencies = [
  "snforge_std",
