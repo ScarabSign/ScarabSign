@@ -1,52 +1,182 @@
 use core::starknet::eth_address::EthAddress;
-use core::starknet::ContractAddress
+use core::starknet::ContractAddress;
 use starknet::secp256_trait::{Signature};
 use starknet::{get_tx_info, get_caller_address};
 use core::pedersen::PedersenTrait;
+use core::poseidon::PoseidonTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
-use scarab_sign::snip_12::{IOffChainMessageHash, IStructHash, v0::StarkNetDomain};
+use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
 
-const U256_TYPE_HASH=
-  selector!("u256(low:u256,high:u256)")
+const U256_TYPE_HASH: felt252 = 
+	selector!("\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+
+const TOKEN_AMOUNT_TYPE_HASH: felt252 = 
+	selector!("\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+
+const NFT_ID_TYPE_HASH: felt252 = 
+	selector!("\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 const BID_TYPE_HASH: felt252 = 
-  selector!("Bid(bidder:ContractAddress,amount:u256,nonce:u256,auction_sig_hash:felt)" + U256_TYPE_HASH)
+	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-const AUCTION_TYPE_HASH: felt252 =
-  selector!("Auction(auctioneer:ContractAddress,auctioneer_nonce:u256,nft_address:ContractAddress,nft_id:u256,token_address:ContractAddress,start_time:u64,deadline:u64,auction_sig_hash:felt,bids:Bid*,bid_sigs:felt*)" + BID_TYPE_HASH)
+const AUCTION_TYPE_HASH: felt252 = 
+	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
+#[derive(Drop, Copy, Hash)]
+struct TokenAmount {
+  token_address: ContractAddress,
+  amount: u256
+}
+
+#[derive(Drop, Copy, Hash)]
+struct NftId {
+  collection_address: ContractAddress,
+  nft_id: u256
+}
 
 #[derive(Drop, Copy, Hash)]
 struct Bid {
   bidder: ContractAddress,
-  amount: u256,
-  nonce: u256,
-  auction_sig_hash: felt252
+  amount: TokenAmount,
+  nonce: u64,
+  auction_sig_hash: felt252,
 }
 
-#[derive(Drop, Copy, Hash)]
+#[derive(Drop, Copy)]
 struct Auction {
   auctioneer: ContractAddress,
-  auctioneer_nonce: u256,
-  nft_address: ContractAddress,
-  nft_id: u256,
-  token_address: ContractAddress,
-  start_time: u64,
+  auctioneer_nonce: u64,
+  nft: NftId,
+  min_bid: TokenAmount,
   deadline: u64,
   auction_sig_hash: felt252,
   bids: Span<Bid>,
-  bid_sigs: Span<felt252>
+  bid_sigs: Span<felt252>,
+}
+
+impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
+	fn get_message_hash(self: @Bid) -> felt252 {
+		let domain = StarknetDomain {
+			name: 'scarab_auction', 
+			version: '1', 
+			chain_id: get_tx_info().unbox().chain_id, 
+			revision: 1
+		};
+		let mut state = PoseidonTrait::new();
+		state = state.update_with('StarkNet Message');
+		state = state.update_with(domain.get_struct_hash());
+		state = state.update_with(get_caller_address());
+		state = state.update_with(self.get_struct_hash());
+		state.finalize()
+	}
+}
+
+impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
+	fn get_message_hash(self: @Auction) -> felt252 {
+		let domain = StarknetDomain {
+			name: 'scarab_auction', 
+			version: '1', 
+			chain_id: get_tx_info().unbox().chain_id, 
+			revision: 1
+		};
+		let mut state = PoseidonTrait::new();
+		state = state.update_with('StarkNet Message');
+		state = state.update_with(domain.get_struct_hash());
+		state = state.update_with(get_caller_address());
+		state = state.update_with(self.get_struct_hash());
+		state.finalize()
+	}
+}
+
+impl StructHashU256 of IStructHash<u256> {
+  fn get_struct_hash(self: @u256) -> felt252 {
+    let mut state = PoseidonTrait::new();
+    state = state.update_with(U256_TYPE_HASH);
+    state = state.update_with(*self);
+    state.finalize()
+  }
+
+}
+
+impl StructHashTokenAmount of IStructHash<TokenAmount> {
+  fn get_struct_hash(self: @TokenAmount) -> felt252 {
+    let mut state = PoseidonTrait::new();
+    state = state.update_with(TOKEN_AMOUNT_TYPE_HASH);
+    state = state.update_with(*self.token_address.into());
+    state = state.update_with(self.amount.get_struct_hash());
+    state.finalize()
+  }
+}
+
+impl StructHashNftId of IStructHash<NftId> {
+  fn get_struct_hash(self: @NftId) -> felt252 {
+    let mut state = PoseidonTrait::new();
+    state = state.update_with(NFT_ID_TYPE_HASH);
+    state = state.update_with(*self.collection_address.into());
+    state = state.update_with(self.nft_id.get_struct_hash());
+    state.finalize()
+  }
+}
+
+impl StructHashBid of IStructHash<Bid> {
+  fn get_struct_hash(self: @Bid) -> felt252 {
+    let mut state = PoseidonTrait::new();
+    state = state.update_with(BID_TYPE_HASH);
+    state = state.update_with(*self.bidder.into());
+    state = state.update_with(self.amount.get_struct_hash());
+    state = state.update_with(*self.nonce.into());
+    state = state.update_with(*self.auction_sig_hash);
+    state.finalize()
+  }
 }
 
 
+impl StructHashAuction of IStructHash<Auction> {
+	fn get_struct_hash(self: @Auction) -> felt252 {
+		let mut state = PoseidonTrait::new();
+		state = state.update_with(AUCTION_TYPE_HASH);
+		state = state.update_with(*self.auctioneer.into());
+		state = state.update_with(*self.auctioneer_nonce.into());
+		state = state.update_with(self.nft.get_struct_hash());
+		state = state.update_with(self.min_bid.get_struct_hash());
+		state = state.update_with(*self.deadline.into());
+		state = state.update_with(*self.auction_sig_hash);
+		state = state.update_with(self.bids.get_struct_hash());
+		state = state.update_with(self.bid_sigs.get_struct_hash());
+		state.finalize()
+	}
+}
+
+// For handling the Span<Bid>
+impl StructHashSpanBid of IStructHash<Span<Bid>> {
+	fn get_struct_hash(self: @Span<Bid>) -> felt252 {
+		let mut state = PoseidonTrait::new();
+		for bid in (*self) {
+			state = state.update_with(bid.get_struct_hash());
+		};
+		state.finalize()
+	}
+}
+
+// For handling the Span<felt252>
+impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
+	fn get_struct_hash(self: @Span<felt252>) -> felt252 {
+		let mut state = PoseidonTrait::new();
+		for sig in (*self) {
+			state = state.update_with(*sig);
+		};
+		state.finalize()
+	}
+}
+
 #[starknet::interface]
 trait IScarabSign<TContractState> {
-    fn get_signature(self: @TContractState, r: u256, s: u256, v: u32) -> Signature;
-    fn verify_eth_signature(
-      self: @TContractState, eth_address: EthAddress, msg_hash: u256, r: u256, s: u256, v: u32,
+  fn get_signature(self: @TContractState, r: u256, s: u256, v: u32) -> Signature;
+  fn verify_eth_signature(
+    self: @TContractState, eth_address: EthAddress, msg_hash: u256, r: u256, s: u256, v: u32,
     );
-    fn recover_public_key(
-      self: @TContractState, eth_address: EthAddress, msg_hash: u256, r: u256, s: u256, v: u32,
+  fn recover_public_key(
+    self: @TContractState, eth_address: EthAddress, msg_hash: u256, r: u256, s: u256, v: u32,
     );
 }
 
