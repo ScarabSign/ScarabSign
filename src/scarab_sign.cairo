@@ -185,9 +185,27 @@ pub mod ScarabSign {
   use starknet::secp256k1::Secp256k1Point;
   use core::ecdsa::check_ecdsa_signature;
   use core::starknet::ContractAddress;
-  use core::starknet::storage::Map;
   use starknet::get_caller_address;
-  use super::{Auction, IOffChainMessageHash};
+  use super::{Auction, IOffChainMessageHash, TokenAmount, Bid,NftId};
+  use starknet::storage::{
+      Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+      StoragePointerWriteAccess,
+  };
+
+  #[event]
+  #[derive(Drop, starknet::Event)]
+  enum Event {
+    AuctionConsumed: AuctionConsumed,
+  }
+  
+  #[derive(Drop, starknet::Event)]
+  struct AuctionConsumed {
+    nft: NftId,
+    token: ContractAddress,
+    amount: u256,
+    auctioneer: ContractAddress,
+    winner: ContractAddress
+  }
 
   #[storage]
   struct Storage {
@@ -211,6 +229,103 @@ pub mod ScarabSign {
         );
         assert(is_valid, 'Invalid signature');
 
+          let block_timestamp = starknet::get_block_timestamp();
+        assert(block_timestamp <= auction.deadline.into(), 'Auction expired');
+
+        // Verify auctioneer
+        assert(get_caller_address() == auction.auctioneer, 'Only auctioneer');
+
+        // Check if auctioneer nonce is valid
+        let nonce_used = self.used_nonces.read((auction.auctioneer, auction.auctioneer_nonce));
+        assert(!nonce_used, 'Nonce already used');
+
+        // Mark auctioneer nonce as used
+        self.used_nonces.write((auction.auctioneer, auction.auctioneer_nonce), true);
+        
+        // Check deadline
+        let block_timestamp = starknet::get_block_timestamp();
+        assert(block_timestamp <= auction.deadline.into(), 'Auction expired');
+
+        // Verify auctioneer
+        assert(get_caller_address() == auction.auctioneer, 'Only auctioneer');
+
+        // Check if auctioneer nonce is valid
+        let nonce_used = self.used_nonces.read((auction.auctioneer, auction.auctioneer_nonce));
+        assert(!nonce_used, 'Nonce already used');
+
+        // Mark auctioneer nonce as used
+        self.used_nonces.write((auction.auctioneer, auction.auctioneer_nonce), true);
+
+        // Process bids from highest to lowest
+        let mut highest_bid: Option<(ContractAddress, TokenAmount)> = Option::None;
+        let mut i: usize = 0;
+        
+        loop {
+            if i >= auction.bids.len() {
+                break;
+            }
+
+            let bid = *auction.bids.at(i);
+            let bid_sig = *auction.bid_sigs.at(i);
+
+            // Skip if bid amount is less than minimum
+            if bid.amount.amount >= auction.min_bid.amount {
+                // Check if bid nonce already used
+                let bid_nonce_used = self.used_nonces.read((bid.bidder, bid.nonce.into()));
+                
+                if !bid_nonce_used {
+                    // Verify bid signature
+                    let bid_hash = bid.get_message_hash();
+                    let is_valid = check_ecdsa_signature(
+                        bid_hash,
+                        bid.bidder.into(),
+                        bid_sig,  // r component
+                        bid_sig   // s component - you'll need to split the signature
+                    );
+
+                    if is_valid {
+                        // Update highest bid if this is higher
+                        match highest_bid {
+                            Option::Some((_, current_highest)) => {
+                                if bid.amount.amount > current_highest.amount {
+                                    highest_bid = Option::Some((bid.bidder, bid.amount));
+                                }
+                            },
+                            Option::None => {
+                                highest_bid = Option::Some((bid.bidder, bid.amount));
+                            }
+                        }
+
+                        // Mark bid nonce as used
+                        self.used_nonces.write((bid.bidder, bid.nonce.into()), true);
+                    }
+                }
+            }
+            
+            i += 1;
+        };
+
+        // Process winning bid
+        match highest_bid {
+            Option::Some((winner, amount)) => {
+                // Here you would:
+                // 1. Transfer NFT to winner
+                // 2. Transfer tokens to auctioneer
+                // 3. Emit event
+                // Implementation depends on your token interfaces
+                self.emit(AuctionConsumed {
+                    nft: auction.nft,
+                    token: amount.token_address,
+                    amount: amount.amount,
+                    auctioneer: auction.auctioneer,
+                    winner: winner
+                });
+            },
+            Option::None => {
+                // No valid bids above minimum
+                assert(false, 'No valid bids');
+            }
+        }
     }
   }
 }
