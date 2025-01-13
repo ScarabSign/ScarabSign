@@ -1,6 +1,6 @@
-mod snip_12;
+pub mod snip_12;
 
-mod scarab_sign;
+pub mod scarab_sign;
 
-mod ERC20;
-mod ERC721;
+pub mod ERC20;
+pub mod ERC721;

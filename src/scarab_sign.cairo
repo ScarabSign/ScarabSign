@@ -9,51 +9,51 @@ use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
 use crate::ERC20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use crate::ERC721::{IERC721Dispatcher, IERC721DispatcherTrait};
 
-const U256_TYPE_HASH: felt252 = 
+pub const U256_TYPE_HASH: felt252 = 
 	selector!("\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-const TOKEN_AMOUNT_TYPE_HASH: felt252 = 
+pub const TOKEN_AMOUNT_TYPE_HASH: felt252 = 
 	selector!("\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")");
 
-const NFT_ID_TYPE_HASH: felt252 = 
+pub const NFT_ID_TYPE_HASH: felt252 = 
 	selector!("\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-const BID_TYPE_HASH: felt252 = 
+pub const BID_TYPE_HASH: felt252 = 
 	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")");
 
-const AUCTION_TYPE_HASH: felt252 = 
+pub const AUCTION_TYPE_HASH: felt252 = 
 	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 #[derive(Drop, Copy, Hash, Serde)]
-struct TokenAmount {
-  token_address: ContractAddress,
-  amount: felt252
+pub struct TokenAmount {
+  pub token_address: ContractAddress,
+  pub amount: felt252
 }
 
 #[derive(Drop, Copy, Hash, Serde)]
-struct NftId {
-  collection_address: ContractAddress,
-  nft_id: u256
+pub struct NftId {
+  pub collection_address: ContractAddress,
+  pub nft_id: u256
 }
 
 #[derive(Drop, Copy, Hash, Serde)]
-struct Bid {
-  bidder: ContractAddress,
-  amount: TokenAmount,
-  nonce: u64,
-  auction_sig_hash: felt252,
+pub struct Bid {
+  pub bidder: ContractAddress,
+  pub amount: TokenAmount,
+  pub nonce: u64,
+  pub auction_sig_hash: felt252,
 }
 
 #[derive(Drop, Copy, Serde)]
-struct Auction {
-  auctioneer: ContractAddress,
-  auctioneer_nonce: u64,
-  nft: NftId,
-  min_bid: TokenAmount,
-  deadline: u64,
-  auction_sig_hash: felt252,
-  bids: Span<Bid>,
-  bid_sigs: Span<felt252>,
+pub struct Auction {
+  pub auctioneer: ContractAddress,
+  pub auctioneer_nonce: u64,
+  pub nft: NftId,
+  pub min_bid: TokenAmount,
+  pub deadline: u64,
+  pub auction_sig_hash: felt252,
+  pub bids: Span<Bid>,
+  pub bid_sigs: Span<felt252>,
 }
 
 impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
@@ -90,7 +90,7 @@ impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 	}
 }
 
-impl StructHashU256 of IStructHash<u256> {
+pub impl StructHashU256 of IStructHash<u256> {
   fn get_struct_hash(self: @u256) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(U256_TYPE_HASH);
@@ -100,17 +100,18 @@ impl StructHashU256 of IStructHash<u256> {
 
 }
 
-impl StructHashTokenAmount of IStructHash<TokenAmount> {
+pub impl StructHashTokenAmount of IStructHash<TokenAmount> {
   fn get_struct_hash(self: @TokenAmount) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(TOKEN_AMOUNT_TYPE_HASH);
-    state = state.update_with(*self.token_address.into());
+    let token_felt: felt252 = (*self.token_address).try_into().unwrap();
+    state = state.update_with(token_felt);
     state = state.update_with(*self.amount);
     state.finalize()
   }
 }
 
-impl StructHashNftId of IStructHash<NftId> {
+pub impl StructHashNftId of IStructHash<NftId> {
   fn get_struct_hash(self: @NftId) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(NFT_ID_TYPE_HASH);
@@ -120,7 +121,7 @@ impl StructHashNftId of IStructHash<NftId> {
   }
 }
 
-impl StructHashBid of IStructHash<Bid> {
+pub impl StructHashBid of IStructHash<Bid> {
   fn get_struct_hash(self: @Bid) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(BID_TYPE_HASH);
@@ -133,7 +134,7 @@ impl StructHashBid of IStructHash<Bid> {
 }
 
 
-impl StructHashAuction of IStructHash<Auction> {
+pub impl StructHashAuction of IStructHash<Auction> {
 	fn get_struct_hash(self: @Auction) -> felt252 {
 		let mut state = PoseidonTrait::new();
 		state = state.update_with(AUCTION_TYPE_HASH);
@@ -150,7 +151,7 @@ impl StructHashAuction of IStructHash<Auction> {
 }
 
 // For handling the Span<Bid>
-impl StructHashSpanBid of IStructHash<Span<Bid>> {
+pub impl StructHashSpanBid of IStructHash<Span<Bid>> {
 	fn get_struct_hash(self: @Span<Bid>) -> felt252 {
 		let mut state = PoseidonTrait::new();
 		for bid in (*self) {
@@ -161,7 +162,7 @@ impl StructHashSpanBid of IStructHash<Span<Bid>> {
 }
 
 // For handling the Span<felt252>
-impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
+pub impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
 	fn get_struct_hash(self: @Span<felt252>) -> felt252 {
 		let mut state = PoseidonTrait::new();
 		for sig in (*self) {
@@ -172,13 +173,13 @@ impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
 }
 
 #[starknet::interface]
-trait IScarabSign<TContractState> {
+pub trait IScarabSign<TContractState> {
   fn consume_auction(
     ref self: TContractState,
     auction: Auction,
     signature_r: felt252,
     signature_s: felt252
-  ) {}
+  );
 }
 
 #[starknet::contract]
@@ -202,12 +203,12 @@ pub mod ScarabSign {
 
   #[event]
   #[derive(Drop, starknet::Event)]
-  enum Event {
+  pub enum Event {
     AuctionConsumed: AuctionConsumed,
   }
 
   #[derive(Drop, starknet::Event)]
-  struct AuctionConsumed {
+  pub struct AuctionConsumed {
     nft: NftId,
     token: ContractAddress,
     amount: felt252,
@@ -216,12 +217,12 @@ pub mod ScarabSign {
   }
 
   #[storage]
-  struct Storage {
+  pub struct Storage {
     used_nonces: Map<(ContractAddress, u64), bool>
   }
 
   #[abi(embed_v0)]
-  impl ScarabSign of super::IScarabSign<ContractState> {
+  pub impl ScarabSign of super::IScarabSign<ContractState> {
     fn consume_auction(
       ref self: ContractState,
       auction: Auction,
