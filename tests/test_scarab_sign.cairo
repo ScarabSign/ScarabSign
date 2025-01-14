@@ -4,58 +4,17 @@ mod test_scarab_sign {
     use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
     use core::array::{ArrayTrait, SpanTrait};
     use core::result::ResultTrait;
-    use core::traits::TryInto;
+    use core::traits::{TryInto, Into};
     use core::poseidon::PoseidonTrait;
     use core::hash::{HashStateTrait, HashStateExTrait};
-    use scarab_sign::snip_12::IStructHash;
+    use starknet::{get_tx_info, get_caller_address};
+    use scarab_sign::snip_12::{IStructHash, IOffChainMessageHash};
+    use scarab_sign::snip_12::v1::StarknetDomain;
     use scarab_sign::scarab_sign::{
         U256_TYPE_HASH, StructHashU256, TokenAmount, TOKEN_AMOUNT_TYPE_HASH, 
         NftId, NFT_ID_TYPE_HASH, Bid, BID_TYPE_HASH, Auction, AUCTION_TYPE_HASH,
         StructHashSpanBid, StructHashSpanFelt252
     };
-
-    #[starknet::interface]
-    trait IScarabSignDispatcher<TContractState> {
-        fn consume_auction(
-            ref self: TContractState,
-            auction: ContractAddress,
-            signature_r: felt252,
-            signature_s: felt252
-        );
-    }
-
-    impl TestStructHashSpanBid of IStructHash<Span<Bid>> {
-        fn get_struct_hash(self: @Span<Bid>) -> felt252 {
-            let mut state = PoseidonTrait::new();
-            let span = *self;
-            let mut i: usize = 0;
-            loop {
-                if i >= span.len() {
-                    break;
-                }
-                state = state.update_with(span[i].get_struct_hash());
-                i += 1;
-            };
-            state.finalize()
-        }
-    }
-
-    impl TestStructHashSpanFelt252 of IStructHash<Span<felt252>> {
-        fn get_struct_hash(self: @Span<felt252>) -> felt252 {
-            let mut state = PoseidonTrait::new();
-            let span = *self;
-            let mut i: usize = 0;
-            loop {
-                if i >= span.len() {
-                    break;
-                }
-                let value = *span[i];
-                state = state.update_with(value);
-                i += 1;
-            };
-            state.finalize()
-        }
-    }
 
     #[test]
     fn test_basic() {
@@ -87,7 +46,7 @@ mod test_scarab_sign {
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
 
         // Calculate hash using get_struct_hash
-        let hash = token_amount.get_struct_hash();
+        let hash = IStructHash::<TokenAmount>::get_struct_hash(@token_amount);
 
         // Calculate expected hash manually
         let mut state = PoseidonTrait::new();
@@ -108,7 +67,7 @@ mod test_scarab_sign {
         let nft = NftId { collection_address, nft_id };
 
         // Calculate hash using get_struct_hash
-        let hash = nft.get_struct_hash();
+        let hash = IStructHash::<NftId>::get_struct_hash(@nft);
 
         // Calculate expected hash manually
         let mut state = PoseidonTrait::new();
@@ -141,14 +100,14 @@ mod test_scarab_sign {
         };
 
         // Calculate hash using get_struct_hash
-        let hash = bid.get_struct_hash();
+        let hash = IStructHash::<Bid>::get_struct_hash(@bid);
 
         // Calculate expected hash manually
         let mut state = PoseidonTrait::new();
         state = state.update_with(BID_TYPE_HASH);
         let bidder_felt: felt252 = bidder.into();
         state = state.update_with(bidder_felt);
-        state = state.update_with(token_amount.get_struct_hash());
+        state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@token_amount));
         let nonce_felt: felt252 = nonce.into();
         state = state.update_with(nonce_felt);
         state = state.update_with(auction_sig_hash);
@@ -186,22 +145,237 @@ mod test_scarab_sign {
             bid_sigs: bid_sigs.span(),
         };
 
+        // Calculate hash using get_struct_hash
+        let hash = IStructHash::<Auction>::get_struct_hash(@auction);
+
+        // Calculate expected hash manually
         let mut state = PoseidonTrait::new();
         state = state.update_with(AUCTION_TYPE_HASH);
         let auctioneer_felt: felt252 = auctioneer.into();
         state = state.update_with(auctioneer_felt);
         let auctioneer_nonce_felt: felt252 = auctioneer_nonce.into();
         state = state.update_with(auctioneer_nonce_felt);
-        state = state.update_with(nft.get_struct_hash());
-        state = state.update_with(min_bid.get_struct_hash());
+        state = state.update_with(IStructHash::<NftId>::get_struct_hash(@nft));
+        state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@min_bid));
         let deadline_felt: felt252 = deadline.into();
         state = state.update_with(deadline_felt);
         state = state.update_with(auction_sig_hash);
-        state = state.update_with(TestStructHashSpanBid::get_struct_hash(@bids.span()));
-        state = state.update_with(TestStructHashSpanFelt252::get_struct_hash(@bid_sigs.span()));
+        state = state.update_with(StructHashSpanBid::get_struct_hash(@auction.bids));
+        state = state.update_with(StructHashSpanFelt252::get_struct_hash(@auction.bid_sigs));
         let expected_hash = state.finalize();
 
-        assert(auction.get_struct_hash() == expected_hash, 'wrong auction hash');
+        assert(hash == expected_hash, 'wrong auction hash');
+    }
+
+    #[test]
+    fn test_span_bid_hash() {
+        let token_address = starknet::contract_address_const::<0xabc>();
+        let auction_sig_hash = 0x123abc_felt252;
+
+        // Create multiple bids
+        let mut bids = ArrayTrait::new();
+        let bid1 = Bid {
+            bidder: starknet::contract_address_const::<0x111>(),
+            amount: TokenAmount { token_address, amount: 2000 },
+            nonce: 1_u64,
+            auction_sig_hash
+        };
+        let bid2 = Bid {
+            bidder: starknet::contract_address_const::<0x222>(),
+            amount: TokenAmount { token_address, amount: 3000 },
+            nonce: 2_u64,
+            auction_sig_hash
+        };
+        bids.append(bid1);
+        bids.append(bid2);
+
+        // Calculate hash using get_struct_hash
+        let hash = StructHashSpanBid::get_struct_hash(@bids.span());
+
+        // Calculate expected hash manually
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(IStructHash::<Bid>::get_struct_hash(@bid1));
+        state = state.update_with(IStructHash::<Bid>::get_struct_hash(@bid2));
+        let expected_hash = state.finalize();
+
+        assert(hash == expected_hash, 'Span<Bid> hash mismatch');
+    }
+
+    #[test]
+    fn test_span_felt252_hash() {
+        // Create multiple felt252 values
+        let mut values = ArrayTrait::new();
+        values.append(0x123_felt252);
+        values.append(0x456_felt252);
+        values.append(0x789_felt252);
+
+        // Calculate hash using get_struct_hash
+        let hash = StructHashSpanFelt252::get_struct_hash(@values.span());
+
+        // Calculate expected hash manually
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(0x123_felt252);
+        state = state.update_with(0x456_felt252);
+        state = state.update_with(0x789_felt252);
+        let expected_hash = state.finalize();
+
+        assert(hash == expected_hash, 'Span<felt252> hash mismatch');
+    }
+
+    #[test]
+    fn test_off_chain_message_hash_bid() {
+        // Create test data
+        let bidder = starknet::contract_address_const::<0x789>();
+        let token_address = starknet::contract_address_const::<0x123>();
+        let amount: felt252 = 1000;
+        let token_amount = TokenAmount { token_address: token_address, amount: amount };
+        let nonce: u64 = 42;
+        let auction_sig_hash: felt252 = 0x123abc;
+
+        let bid = Bid { 
+            bidder: bidder, 
+            amount: token_amount, 
+            nonce: nonce, 
+            auction_sig_hash: auction_sig_hash 
+        };
+
+        // Get message hash
+        let hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
+
+        // Calculate expected hash manually
+        let domain = StarknetDomain {
+            name: 'scarab_auction', 
+            version: '1', 
+            chain_id: get_tx_info().unbox().chain_id, 
+            revision: 1
+        };
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(BID_TYPE_HASH);
+        state = state.update_with(IStructHash::<StarknetDomain>::get_struct_hash(@domain));
+        let caller_felt: felt252 = get_caller_address().into();
+        state = state.update_with(caller_felt);
+        state = state.update_with(IStructHash::<Bid>::get_struct_hash(@bid));
+        let expected_hash = state.finalize();
+
+        assert(hash == expected_hash, 'Off-chain bid hash mismatch');
+    }
+
+    #[test]
+    fn test_off_chain_message_hash_auction() {
+        let auctioneer = starknet::contract_address_const::<0x123>();
+        let auctioneer_nonce = 456_u64;
+        let collection_address = starknet::contract_address_const::<0x789>();
+        let nft_id = 123_u256;
+        let token_address = starknet::contract_address_const::<0xabc>();
+        let min_bid_amount = 1000_felt252;
+        let deadline = 1234567890_u64;
+        let auction_sig_hash = 0x123abc_felt252;
+
+        let nft = NftId { collection_address, nft_id };
+        let min_bid = TokenAmount { token_address, amount: min_bid_amount };
+
+        let mut bids = ArrayTrait::new();
+        let mut bid_sigs = ArrayTrait::new();
+
+        let auction = Auction {
+            auctioneer,
+            auctioneer_nonce,
+            nft,
+            min_bid,
+            deadline,
+            auction_sig_hash,
+            bids: bids.span(),
+            bid_sigs: bid_sigs.span(),
+        };
+
+        // Get message hash
+        let hash = IOffChainMessageHash::<Auction>::get_message_hash(@auction);
+
+        // Calculate expected hash manually
+        let domain = StarknetDomain {
+            name: 'scarab_auction', 
+            version: '1', 
+            chain_id: get_tx_info().unbox().chain_id, 
+            revision: 1
+        };
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(AUCTION_TYPE_HASH);
+        state = state.update_with(IStructHash::<StarknetDomain>::get_struct_hash(@domain));
+        let caller_felt: felt252 = get_caller_address().into();
+        state = state.update_with(caller_felt);
+        state = state.update_with(IStructHash::<Auction>::get_struct_hash(@auction));
+        let expected_hash = state.finalize();
+
+        assert(hash == expected_hash, 'Off-chain auction hash mismatch');
+    }
+
+    #[test]
+    fn test_auction_hash_with_bids() {
+        let auctioneer = starknet::contract_address_const::<0x123>();
+        let auctioneer_nonce = 456_u64;
+        let collection_address = starknet::contract_address_const::<0x789>();
+        let nft_id = 123_u256;
+        let token_address = starknet::contract_address_const::<0xabc>();
+        let min_bid_amount = 1000_felt252;
+        let deadline = 1234567890_u64;
+        let auction_sig_hash = 0x123abc_felt252;
+
+        let nft = NftId { collection_address, nft_id };
+        let min_bid = TokenAmount { token_address, amount: min_bid_amount };
+
+        // Create some bids
+        let mut bids = ArrayTrait::new();
+        let bid1 = Bid {
+            bidder: starknet::contract_address_const::<0x111>(),
+            amount: TokenAmount { token_address, amount: 2000 },
+            nonce: 1_u64,
+            auction_sig_hash
+        };
+        let bid2 = Bid {
+            bidder: starknet::contract_address_const::<0x222>(),
+            amount: TokenAmount { token_address, amount: 3000 },
+            nonce: 2_u64,
+            auction_sig_hash
+        };
+        bids.append(bid1);
+        bids.append(bid2);
+
+        // Create some bid signatures
+        let mut bid_sigs = ArrayTrait::new();
+        bid_sigs.append(0x456_felt252);
+        bid_sigs.append(0x789_felt252);
+
+        let auction = Auction {
+            auctioneer,
+            auctioneer_nonce,
+            nft,
+            min_bid,
+            deadline,
+            auction_sig_hash,
+            bids: bids.span(),
+            bid_sigs: bid_sigs.span(),
+        };
+
+        // Calculate hash
+        let hash = IStructHash::<Auction>::get_struct_hash(@auction);
+
+        // Calculate expected hash manually
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(AUCTION_TYPE_HASH);
+        let auctioneer_felt: felt252 = auctioneer.into();
+        state = state.update_with(auctioneer_felt);
+        let auctioneer_nonce_felt: felt252 = auctioneer_nonce.into();
+        state = state.update_with(auctioneer_nonce_felt);
+        state = state.update_with(IStructHash::<NftId>::get_struct_hash(@nft));
+        state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@min_bid));
+        let deadline_felt: felt252 = deadline.into();
+        state = state.update_with(deadline_felt);
+        state = state.update_with(auction_sig_hash);
+        state = state.update_with(StructHashSpanBid::get_struct_hash(@auction.bids));
+        state = state.update_with(StructHashSpanFelt252::get_struct_hash(@auction.bid_sigs));
+        let expected_hash = state.finalize();
+
+        assert(hash == expected_hash, 'Auction with bids hash mismatch');
     }
 
     #[test]
