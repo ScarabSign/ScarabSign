@@ -8,6 +8,7 @@ use core::hash::{HashStateTrait, HashStateExTrait};
 use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
 use crate::ERC20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use crate::ERC721::{IERC721Dispatcher, IERC721DispatcherTrait};
+use core::array::SpanTrait;
 
 pub const U256_TYPE_HASH: felt252 = 
 	selector!("\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
@@ -115,8 +116,10 @@ pub impl StructHashNftId of IStructHash<NftId> {
   fn get_struct_hash(self: @NftId) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(NFT_ID_TYPE_HASH);
-    state = state.update_with(*self.collection_address.into());
-    state = state.update_with(self.nft_id.get_struct_hash());
+    let collection_felt: felt252 = (*self.collection_address).try_into().unwrap();
+    state = state.update_with(collection_felt);
+    let nft_id_felt: felt252 = (*self.nft_id).try_into().unwrap();
+    state = state.update_with(nft_id_felt);
     state.finalize()
   }
 }
@@ -132,7 +135,6 @@ pub impl StructHashBid of IStructHash<Bid> {
     state.finalize()
   }
 }
-
 
 pub impl StructHashAuction of IStructHash<Auction> {
 	fn get_struct_hash(self: @Auction) -> felt252 {
@@ -150,26 +152,37 @@ pub impl StructHashAuction of IStructHash<Auction> {
 	}
 }
 
-// For handling the Span<Bid>
 pub impl StructHashSpanBid of IStructHash<Span<Bid>> {
-	fn get_struct_hash(self: @Span<Bid>) -> felt252 {
-		let mut state = PoseidonTrait::new();
-		for bid in (*self) {
-			state = state.update_with(bid.get_struct_hash());
-		};
-		state.finalize()
-	}
+    fn get_struct_hash(self: @Span<Bid>) -> felt252 {
+        let mut state = PoseidonTrait::new();
+        let span = *self;
+        let mut i: usize = 0;
+        loop {
+            if i >= span.len() {
+                break;
+            }
+            state = state.update_with(span[i].get_struct_hash());
+            i += 1;
+        };
+        state.finalize()
+    }
 }
 
-// For handling the Span<felt252>
 pub impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
-	fn get_struct_hash(self: @Span<felt252>) -> felt252 {
-		let mut state = PoseidonTrait::new();
-		for sig in (*self) {
-			state = state.update_with(*sig);
-		};
-		state.finalize()
-	}
+    fn get_struct_hash(self: @Span<felt252>) -> felt252 {
+        let mut state = PoseidonTrait::new();
+        let span = *self;
+        let mut i: usize = 0;
+        loop {
+            if i >= span.len() {
+                break;
+            }
+            let value = *span[i];
+            state = state.update_with(value);
+            i += 1;
+        };
+        state.finalize()
+    }
 }
 
 #[starknet::interface]
