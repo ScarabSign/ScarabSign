@@ -16,8 +16,8 @@ mod test_scarab_sign {
     use scarab_sign::scarab_sign::{
         U256_TYPE_HASH, StructHashU256, TokenAmount, TOKEN_AMOUNT_TYPE_HASH, 
         NFT_ID_TYPE_HASH, BID_TYPE_HASH, AUCTION_TYPE_HASH, NftId, Bid, Auction,
-        StructHashSpanBid, StructHashSpanFelt252,
-        IScarabSignDispatcher, IScarabSignDispatcherTrait
+        StructHashSpanBid, StructHashSpanFelt252, EcdsaSignature, StructHashSpanEcdsaSignature,
+        StructHashSpanSpanEcdsaSignature, IScarabSignDispatcher, IScarabSignDispatcherTrait
     };
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
@@ -98,7 +98,10 @@ mod test_scarab_sign {
         let amount: felt252 = 1000;
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
         let nonce: u64 = 42;
-        let auction_sig_hash: felt252 = 0x123abc;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         let bid = Bid { 
             bidder: bidder, 
@@ -118,7 +121,7 @@ mod test_scarab_sign {
         state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@token_amount));
         let nonce_felt: felt252 = nonce.into();
         state = state.update_with(nonce_felt);
-        state = state.update_with(auction_sig_hash);
+        state = state.update_with(StructHashSpanEcdsaSignature::get_struct_hash(@auction_sig_hash));
         let expected_hash = state.finalize();
 
         // Compare hashes
@@ -134,13 +137,16 @@ mod test_scarab_sign {
         let token_address = starknet::contract_address_const::<0xabc>();
         let min_bid_amount = 1000_felt252;
         let deadline = 1234567890_u64;
-        let auction_sig_hash = 0x123abc_felt252;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         let nft = NftId { collection_address, nft_id };
         let min_bid = TokenAmount { token_address, amount: min_bid_amount };
 
         let mut bids = ArrayTrait::new();
-        let mut bid_sigs = ArrayTrait::new();
+        let mut bid_sigs: Array<Span<EcdsaSignature>> = ArrayTrait::new();
 
         let auction = Auction {
             auctioneer,
@@ -167,9 +173,9 @@ mod test_scarab_sign {
         state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@min_bid));
         let deadline_felt: felt252 = deadline.into();
         state = state.update_with(deadline_felt);
-        state = state.update_with(auction_sig_hash);
+        state = state.update_with(StructHashSpanEcdsaSignature::get_struct_hash(@auction_sig_hash));
         state = state.update_with(StructHashSpanBid::get_struct_hash(@auction.bids));
-        state = state.update_with(StructHashSpanFelt252::get_struct_hash(@auction.bid_sigs));
+        state = state.update_with(StructHashSpanSpanEcdsaSignature::get_struct_hash(@auction.bid_sigs));
         let expected_hash = state.finalize();
 
         assert(hash == expected_hash, 'wrong auction hash');
@@ -178,7 +184,10 @@ mod test_scarab_sign {
     #[test]
     fn test_span_bid_hash() {
         let token_address = starknet::contract_address_const::<0xabc>();
-        let auction_sig_hash = 0x123abc_felt252;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         // Create multiple bids
         let mut bids = ArrayTrait::new();
@@ -238,7 +247,10 @@ mod test_scarab_sign {
         let amount: felt252 = 1000;
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
         let nonce: u64 = 42;
-        let auction_sig_hash: felt252 = 0x123abc;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         let bid = Bid { 
             bidder: bidder, 
@@ -277,13 +289,16 @@ mod test_scarab_sign {
         let token_address = starknet::contract_address_const::<0xabc>();
         let min_bid_amount = 1000_felt252;
         let deadline = 1234567890_u64;
-        let auction_sig_hash = 0x123abc_felt252;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         let nft = NftId { collection_address, nft_id };
         let min_bid = TokenAmount { token_address, amount: min_bid_amount };
 
         let mut bids = ArrayTrait::new();
-        let mut bid_sigs = ArrayTrait::new();
+        let mut bid_sigs: Array<Span<EcdsaSignature>> = ArrayTrait::new();
 
         let auction = Auction {
             auctioneer,
@@ -326,7 +341,10 @@ mod test_scarab_sign {
         let token_address = starknet::contract_address_const::<0xabc>();
         let min_bid_amount = 1000_felt252;
         let deadline = 1234567890_u64;
-        let auction_sig_hash = 0x123abc_felt252;
+        
+        // Create an empty array and convert to span for auction_sig_hash
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
         let nft = NftId { collection_address, nft_id };
         let min_bid = TokenAmount { token_address, amount: min_bid_amount };
@@ -349,9 +367,15 @@ mod test_scarab_sign {
         bids.append(bid2);
 
         // Create some bid signatures
-        let mut bid_sigs = ArrayTrait::new();
-        bid_sigs.append(0x456_felt252);
-        bid_sigs.append(0x789_felt252);
+        let mut bid_sigs: Array<Span<EcdsaSignature>> = ArrayTrait::new();
+        let mut bid_sig1: Array<EcdsaSignature> = ArrayTrait::new();
+        bid_sig1.append(EcdsaSignature { r: 0x456_felt252, s: 0x456_felt252 });
+        let bid_sig1_span = bid_sig1.span();
+        let mut bid_sig2: Array<EcdsaSignature> = ArrayTrait::new();
+        bid_sig2.append(EcdsaSignature { r: 0x789_felt252, s: 0x789_felt252 });
+        let bid_sig2_span = bid_sig2.span();
+        bid_sigs.append(bid_sig1_span);
+        bid_sigs.append(bid_sig2_span);
 
         let auction = Auction {
             auctioneer,
@@ -378,9 +402,9 @@ mod test_scarab_sign {
         state = state.update_with(IStructHash::<TokenAmount>::get_struct_hash(@min_bid));
         let deadline_felt: felt252 = deadline.into();
         state = state.update_with(deadline_felt);
-        state = state.update_with(auction_sig_hash);
+        state = state.update_with(StructHashSpanEcdsaSignature::get_struct_hash(@auction_sig_hash));
         state = state.update_with(StructHashSpanBid::get_struct_hash(@auction.bids));
-        state = state.update_with(StructHashSpanFelt252::get_struct_hash(@auction.bid_sigs));
+        state = state.update_with(StructHashSpanSpanEcdsaSignature::get_struct_hash(@auction.bid_sigs));
         let expected_hash = state.finalize();
 
         assert(hash == expected_hash, 'Auction with bids hash mismatch');
@@ -434,11 +458,12 @@ mod test_scarab_sign {
         };
 
         // Create a bid
+        let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
         let bid = Bid {
             bidder,
             amount: bid_amount,
             nonce: 1_u64,
-            auction_sig_hash: 0, // This will be set after generating auction hash
+            auction_sig_hash: empty_sigs.span(), // Empty signature span
         };
 
         let bid_hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);

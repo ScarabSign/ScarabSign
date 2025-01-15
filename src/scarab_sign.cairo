@@ -10,6 +10,9 @@ use crate::ERC20::{IERC20Dispatcher, IERC20DispatcherTrait};
 use crate::ERC721::{IERC721Dispatcher, IERC721DispatcherTrait};
 use core::array::SpanTrait;
 
+pub const SIGNATURE_TYPE_HASH: felt252 = 
+  selector!("\"Signature\"(\"r\":\"felt252\",\"s\":\"felt252\")");
+
 pub const U256_TYPE_HASH: felt252 = 
 	selector!("\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
@@ -26,6 +29,12 @@ pub const AUCTION_TYPE_HASH: felt252 =
 	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 #[derive(Drop, Copy, Hash, Serde)]
+pub struct EcdsaSignature {
+  pub r: felt252,
+  pub s: felt252
+}
+
+#[derive(Drop, Copy, Hash, Serde)]
 pub struct TokenAmount {
   pub token_address: ContractAddress,
   pub amount: felt252
@@ -37,12 +46,12 @@ pub struct NftId {
   pub nft_id: u256
 }
 
-#[derive(Drop, Copy, Hash, Serde)]
+#[derive(Drop, Copy, Serde)]
 pub struct Bid {
   pub bidder: ContractAddress,
   pub amount: TokenAmount,
   pub nonce: u64,
-  pub auction_sig_hash: felt252,
+  pub auction_sig_hash: Span<EcdsaSignature>,
 }
 
 #[derive(Drop, Copy, Serde)]
@@ -52,9 +61,9 @@ pub struct Auction {
   pub nft: NftId,
   pub min_bid: TokenAmount,
   pub deadline: u64,
-  pub auction_sig_hash: felt252,
+  pub auction_sig_hash: Span<EcdsaSignature>,
   pub bids: Span<Bid>,
-  pub bid_sigs: Span<felt252>,
+  pub bid_sigs: Span<Span<EcdsaSignature>>,
 }
 
 impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
@@ -89,6 +98,16 @@ impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 		state = state.update_with(self.get_struct_hash());
 		state.finalize()
 	}
+}
+
+pub impl StructHashEcdsaSignature of IStructHash<EcdsaSignature> {
+  fn get_struct_hash(self: @EcdsaSignature) -> felt252 {
+    let mut state = PoseidonTrait::new();
+    state = state.update_with(SIGNATURE_TYPE_HASH);
+    state = state.update_with(*self.r);
+    state = state.update_with(*self.s);
+    state.finalize()
+  }
 }
 
 pub impl StructHashU256 of IStructHash<u256> {
@@ -131,7 +150,7 @@ pub impl StructHashBid of IStructHash<Bid> {
     state = state.update_with(*self.bidder.into());
     state = state.update_with(self.amount.get_struct_hash());
     state = state.update_with(*self.nonce.into());
-    state = state.update_with(*self.auction_sig_hash);
+    state = state.update_with((*self.auction_sig_hash).get_struct_hash());
     state.finalize()
   }
 }
@@ -145,7 +164,7 @@ pub impl StructHashAuction of IStructHash<Auction> {
 		state = state.update_with(self.nft.get_struct_hash());
 		state = state.update_with(self.min_bid.get_struct_hash());
 		state = state.update_with(*self.deadline.into());
-		state = state.update_with(*self.auction_sig_hash);
+		state = state.update_with((*self.auction_sig_hash).get_struct_hash());
 		state = state.update_with(self.bids.get_struct_hash());
 		state = state.update_with(self.bid_sigs.get_struct_hash());
 		state.finalize()
@@ -179,6 +198,38 @@ pub impl StructHashSpanFelt252 of IStructHash<Span<felt252>> {
             }
             let value = *span[i];
             state = state.update_with(value);
+            i += 1;
+        };
+        state.finalize()
+    }
+}
+
+pub impl StructHashSpanEcdsaSignature of IStructHash<Span<EcdsaSignature>> {
+    fn get_struct_hash(self: @Span<EcdsaSignature>) -> felt252 {
+        let mut state = PoseidonTrait::new();
+        let span = *self;
+        let mut i: usize = 0;
+        loop {
+            if i >= span.len() {
+                break;
+            }
+            state = state.update_with(span[i].get_struct_hash());
+            i += 1;
+        };
+        state.finalize()
+    }
+}
+
+pub impl StructHashSpanSpanEcdsaSignature of IStructHash<Span<Span<EcdsaSignature>>> {
+    fn get_struct_hash(self: @Span<Span<EcdsaSignature>>) -> felt252 {
+        let mut state = PoseidonTrait::new();
+        let span = *self;
+        let mut i: usize = 0;
+        loop {
+            if i >= span.len() {
+                break;
+            }
+            state = state.update_with(span[i].get_struct_hash());
             i += 1;
         };
         state.finalize()
@@ -275,8 +326,10 @@ pub mod ScarabSign {
             }
 
             let bid = *auction.bids.at(i);
-
-            let bid_sig = *auction.bid_sigs.at(i);
+            let bid_sigs = *auction.bid_sigs.at(i);
+            
+            // Get first signature from the span
+            let bid_sig = *bid_sigs.at(0);
 
             // Skip if bid amount is less than minimum
             let bid_amount: u128 = bid.amount.amount.try_into().unwrap();
@@ -291,8 +344,8 @@ pub mod ScarabSign {
                     let is_valid = check_ecdsa_signature(
                         bid_hash,
                         bid.bidder.into(),
-                        bid_sig,  // r component
-                        bid_sig   // s component
+                        bid_sig.r,  // r component
+                        bid_sig.s   // s component
                     );
 
                     if is_valid {
