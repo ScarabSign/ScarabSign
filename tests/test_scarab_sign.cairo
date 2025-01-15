@@ -1,10 +1,13 @@
 #[cfg(test)]
 mod test_scarab_sign {
-    use starknet::ContractAddress;
-    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
-    use core::array::{ArrayTrait, SpanTrait};
+    use core::array::SpanTrait;
+    use core::traits::Into;
     use core::result::ResultTrait;
-    use core::traits::{TryInto, Into};
+    use core::option::OptionTrait;
+    use starknet::ContractAddress;
+    use core::starknet::contract_address_const;
+    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
+    use core::array::ArrayTrait;
     use core::poseidon::PoseidonTrait;
     use core::hash::{HashStateTrait, HashStateExTrait};
     use starknet::{get_tx_info, get_caller_address};
@@ -12,9 +15,14 @@ mod test_scarab_sign {
     use scarab_sign::snip_12::v1::StarknetDomain;
     use scarab_sign::scarab_sign::{
         U256_TYPE_HASH, StructHashU256, TokenAmount, TOKEN_AMOUNT_TYPE_HASH, 
-        NftId, NFT_ID_TYPE_HASH, Bid, BID_TYPE_HASH, Auction, AUCTION_TYPE_HASH,
-        StructHashSpanBid, StructHashSpanFelt252
+        NFT_ID_TYPE_HASH, BID_TYPE_HASH, AUCTION_TYPE_HASH, NftId, Bid, Auction,
+        StructHashSpanBid, StructHashSpanFelt252,
+        IScarabSignDispatcher, IScarabSignDispatcherTrait
     };
+    use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
+    use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
+    use snforge_std::signature::KeyPairTrait;
+    use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl, StarkCurveVerifierImpl};
 
     #[test]
     fn test_basic() {
@@ -389,5 +397,51 @@ mod test_scarab_sign {
         let zero: felt252 = 0;
         let zero_address: ContractAddress = zero.try_into().unwrap();
         assert(contract_address != zero_address, 'deployment failed');
+    }
+
+     #[test]
+    fn test_consume_auction() {
+        let erc20 = declare("MockERC20").unwrap().contract_class();
+        let erc721 = declare("MockERC721").unwrap().contract_class();
+        
+        let constructor_calldata: Array<felt252> = ArrayTrait::new();
+        
+        let (erc20_address, _) = erc20.deploy(@constructor_calldata).unwrap();
+        let (erc721_address, _) = erc721.deploy(@constructor_calldata).unwrap();
+
+        let erc20_dispatcher = IMockERC20Dispatcher { contract_address: erc20_address };
+        let erc721_dispatcher = IMockERC721Dispatcher { contract_address: erc721_address };
+        
+        let bidder_keypair = KeyPairTrait::<felt252, felt252>::generate();
+        let auctioneer_keypair = KeyPairTrait::<felt252, felt252>::generate();
+        
+        let bidder: ContractAddress = bidder_keypair.public_key.try_into().unwrap();
+        let auctioneer: ContractAddress = auctioneer_keypair.public_key.try_into().unwrap();
+
+        erc20_dispatcher.mint(bidder, 1000_u256);
+        erc721_dispatcher.mint(auctioneer, 0_u256);
+
+        // Create the bid amount
+        let bid_amount = TokenAmount {
+            token_address: erc20_address,
+            amount: 1000
+        };
+
+        // Create the NFT ID
+        let nft = NftId {
+            collection_address: erc721_address,
+            nft_id: 0_u256
+        };
+
+        // Create a bid
+        let bid = Bid {
+            bidder,
+            amount: bid_amount,
+            nonce: 1_u64,
+            auction_sig_hash: 0, // This will be set after generating auction hash
+        };
+
+        let bid_hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
+        let (signature_r, signature_s): (felt252, felt252) = bidder_keypair.sign(bid_hash).unwrap();
     }
 }
