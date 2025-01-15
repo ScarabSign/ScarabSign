@@ -28,6 +28,9 @@ pub const BID_TYPE_HASH: felt252 =
 pub const AUCTION_TYPE_HASH: felt252 = 
 	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
+pub const AUCTION_AUTH_TYPE_HASH: felt252 = 
+    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+
 #[derive(Drop, Copy, Hash, Serde)]
 pub struct EcdsaSignature {
   pub r: felt252,
@@ -66,6 +69,15 @@ pub struct Auction {
   pub bid_sigs: Span<Span<EcdsaSignature>>,
 }
 
+#[derive(Drop, Copy, Hash, Serde)]
+pub struct AuctionAuth {
+    pub auctioneer: ContractAddress,
+    pub auctioneer_nonce: u64,
+    pub nft: NftId,
+    pub min_bid: TokenAmount,
+    pub deadline: u64,
+}
+
 impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
 	fn get_message_hash(self: @Bid) -> felt252 {
 		let domain = StarknetDomain {
@@ -98,6 +110,23 @@ impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 		state = state.update_with(self.get_struct_hash());
 		state.finalize()
 	}
+}
+
+impl OffChainMessageHashAuctionAuth of IOffChainMessageHash<AuctionAuth> {
+    fn get_message_hash(self: @AuctionAuth) -> felt252 {
+        let domain = StarknetDomain {
+            name: 'scarab_auction', 
+            version: '1', 
+            chain_id: get_tx_info().unbox().chain_id, 
+            revision: 1
+        };
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(AUCTION_AUTH_TYPE_HASH);
+        state = state.update_with(domain.get_struct_hash());
+        state = state.update_with(get_caller_address());
+        state = state.update_with(self.get_struct_hash());
+        state.finalize()
+    }
 }
 
 pub impl StructHashEcdsaSignature of IStructHash<EcdsaSignature> {
@@ -169,6 +198,19 @@ pub impl StructHashAuction of IStructHash<Auction> {
 		state = state.update_with(self.bid_sigs.get_struct_hash());
 		state.finalize()
 	}
+}
+
+pub impl StructHashAuctionAuth of IStructHash<AuctionAuth> {
+    fn get_struct_hash(self: @AuctionAuth) -> felt252 {
+        let mut state = PoseidonTrait::new();
+        state = state.update_with(AUCTION_AUTH_TYPE_HASH);
+        state = state.update_with(*self.auctioneer.into());
+        state = state.update_with(*self.auctioneer_nonce.into());
+        state = state.update_with(self.nft.get_struct_hash());
+        state = state.update_with(self.min_bid.get_struct_hash());
+        state = state.update_with(*self.deadline.into());
+        state.finalize()
+    }
 }
 
 pub impl StructHashSpanBid of IStructHash<Span<Bid>> {

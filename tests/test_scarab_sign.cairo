@@ -17,7 +17,8 @@ mod test_scarab_sign {
         U256_TYPE_HASH, StructHashU256, TokenAmount, TOKEN_AMOUNT_TYPE_HASH, 
         NFT_ID_TYPE_HASH, BID_TYPE_HASH, AUCTION_TYPE_HASH, NftId, Bid, Auction,
         StructHashSpanBid, StructHashSpanFelt252, EcdsaSignature, StructHashSpanEcdsaSignature,
-        StructHashSpanSpanEcdsaSignature, IScarabSignDispatcher, IScarabSignDispatcherTrait
+        StructHashSpanSpanEcdsaSignature, IScarabSignDispatcher, IScarabSignDispatcherTrait,
+        AuctionAuth
     };
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
@@ -411,6 +412,35 @@ mod test_scarab_sign {
     }
 
     #[test]
+    fn test_auction_auth_hash() {
+        // Create test data
+        let auctioneer = starknet::contract_address_const::<0x123>();
+        let token_address = starknet::contract_address_const::<0x456>();
+        let collection_address = starknet::contract_address_const::<0x789>();
+        
+        let min_bid = TokenAmount {
+            token_address,
+            amount: 1000
+        };
+
+        let nft = NftId {
+            collection_address,
+            nft_id: 123_u256
+        };
+
+        let auction_auth = AuctionAuth {
+            auctioneer,
+            auctioneer_nonce: 456_u64,
+            nft,
+            min_bid,
+            deadline: 999_u64,
+        };
+
+        let hash = IOffChainMessageHash::<AuctionAuth>::get_message_hash(@auction_auth);
+        assert(hash != 0, 'Hash should not be zero');
+    }
+
+    #[test]
     fn test_deploy() {
         // First declare and deploy the contract
         let contract = declare("ScarabSign").unwrap().contract_class();
@@ -429,7 +459,6 @@ mod test_scarab_sign {
         let erc721 = declare("MockERC721").unwrap().contract_class();
         
         let constructor_calldata: Array<felt252> = ArrayTrait::new();
-        
         let (erc20_address, _) = erc20.deploy(@constructor_calldata).unwrap();
         let (erc721_address, _) = erc721.deploy(@constructor_calldata).unwrap();
 
@@ -457,16 +486,56 @@ mod test_scarab_sign {
             nft_id: 0_u256
         };
 
+        // Create and sign the auction auth first
+        let auction_auth = AuctionAuth {
+            auctioneer,
+            auctioneer_nonce: 1_u64,
+            nft,
+            min_bid: bid_amount,
+            deadline: 9999999999_u64,
+        };
+
+        let auction_auth_hash = IOffChainMessageHash::<AuctionAuth>::get_message_hash(@auction_auth);
+        let (auction_signature_r, auction_signature_s): (felt252, felt252) = auctioneer_keypair.sign(auction_auth_hash).unwrap();
+
         // Create a bid
         let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        let auction_auth_sig = EcdsaSignature { r: auction_signature_r, s: auction_signature_s };
+        let mut auction_sigs: Array<EcdsaSignature> = ArrayTrait::new();
+        auction_sigs.append(auction_auth_sig);
+        
         let bid = Bid {
             bidder,
             amount: bid_amount,
             nonce: 1_u64,
-            auction_sig_hash: empty_sigs.span(), // Empty signature span
+            auction_sig_hash: auction_sigs.span()
         };
 
         let bid_hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
-        let (signature_r, signature_s): (felt252, felt252) = bidder_keypair.sign(bid_hash).unwrap();
+        let (bid_signature_r, bid_signature_s): (felt252, felt252) = bidder_keypair.sign(bid_hash).unwrap();
+
+        // Create the final auction with the auth data, signatures and bids
+        let auction = Auction {
+            auctioneer: auction_auth.auctioneer,
+            auctioneer_nonce: auction_auth.auctioneer_nonce,
+            nft: auction_auth.nft,
+            min_bid: auction_auth.min_bid,
+            deadline: auction_auth.deadline,
+            auction_sig_hash: auction_sigs.span(),
+            bids: array![bid].span(),
+            bid_sigs: array![array![EcdsaSignature { r: bid_signature_r, s: bid_signature_s }].span()].span(),
+        };
+
+        let auction_hash = IOffChainMessageHash::<Auction>::get_message_hash(@auction);
+        let (auction_signature_r, auction_signature_s): (felt252, felt252) = auctioneer_keypair.sign(auction_hash).unwrap();
+
+        // Deploy the contract
+        let contract = declare("ScarabSign").unwrap().contract_class();
+        let empty_constructor_calldata: Array<felt252> = ArrayTrait::new();
+        let (contract_address, _) = contract.deploy(@empty_constructor_calldata).unwrap();
+
+        // Create the dispatcher and call consume_auction
+        let contract_dispatcher = IScarabSignDispatcher { contract_address };
+        contract_dispatcher.consume_auction(auction, auction_signature_r, auction_signature_s);
     }
 }
