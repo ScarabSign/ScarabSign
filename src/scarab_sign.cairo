@@ -31,6 +31,9 @@ pub const AUCTION_TYPE_HASH: felt252 =
 pub const AUCTION_AUTH_TYPE_HASH: felt252 = 
     selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
+// Add Katana chain ID constant
+const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
+
 #[derive(Drop, Copy, Hash, Serde)]
 pub struct EcdsaSignature {
   pub r: felt252,
@@ -83,7 +86,7 @@ impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
 		let domain = StarknetDomain {
 			name: 'scarab_auction', 
 			version: '1', 
-			chain_id: get_tx_info().unbox().chain_id, 
+			chain_id: KATANA_CHAIN_ID,
 			revision: 1
 		};
 		let mut state = PoseidonTrait::new();
@@ -100,7 +103,7 @@ impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 		let domain = StarknetDomain {
 			name: 'scarab_auction', 
 			version: '1', 
-			chain_id: get_tx_info().unbox().chain_id, 
+			chain_id: KATANA_CHAIN_ID,
 			revision: 1
 		};
 		let mut state = PoseidonTrait::new();
@@ -117,7 +120,7 @@ impl OffChainMessageHashAuctionAuth of IOffChainMessageHash<AuctionAuth> {
         let domain = StarknetDomain {
             name: 'scarab_auction', 
             version: '1', 
-            chain_id: get_tx_info().unbox().chain_id, 
+            chain_id: KATANA_CHAIN_ID,
             revision: 1
         };
         let mut state = PoseidonTrait::new();
@@ -295,7 +298,7 @@ pub mod ScarabSign {
   use starknet::secp256k1::Secp256k1Point;
   use core::ecdsa::check_ecdsa_signature;
   use core::starknet::ContractAddress;
-  use starknet::get_caller_address;
+  use starknet::{get_tx_info, get_caller_address};
   use super::{Auction, IOffChainMessageHash, TokenAmount, Bid,NftId};
   use starknet::storage::{
       Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
@@ -334,27 +337,46 @@ pub mod ScarabSign {
       auction: Auction,
       signature_r: felt252,
       signature_s: felt252
-      ) {
-        let auction_hash = auction.get_message_hash();
+    ) {
+        // Create AuctionAuth from Auction
+        let auction_auth = super::AuctionAuth {
+            auctioneer: auction.auctioneer,
+            auctioneer_nonce: auction.auctioneer_nonce,
+            nft: auction.nft,
+            min_bid: auction.min_bid,
+            deadline: auction.deadline
+        };
+        
+        // Get the auction auth hash for signature verification
+        let auction_auth_hash = auction_auth.get_message_hash();
+        
+        // Debug logging for signature verification
+        let caller: felt252 = get_caller_address().try_into().unwrap();
+        let auctioneer: felt252 = auction.auctioneer.try_into().unwrap();
+        println!("=== Signature Verification ===");
+        println!("Auction auth hash: {}", auction_auth_hash);
+        println!("Caller address (felt): {}", caller);
+        println!("Auctioneer address (felt): {}", auctioneer);
+        println!("========================");
+        
+        // Verify the signature is from the auctioneer
         let is_valid = check_ecdsa_signature(
-          auction_hash,
-          get_caller_address().into(),
-          signature_r,
-          signature_s 
+            auction_auth_hash,
+            get_caller_address().into(),
+            signature_r,
+            signature_s
         );
         assert(is_valid, 'Invalid signature');
 
-          let block_timestamp = starknet::get_block_timestamp();
+        // Check auction deadline
+        let block_timestamp = starknet::get_block_timestamp();
         assert(block_timestamp <= auction.deadline.into(), 'Auction expired');
 
-        // Verify auctioneer
-        assert(get_caller_address() == auction.auctioneer, 'Only auctioneer');
-
-        // Check if auctioneer nonce is valid
+        // Check that nonce hasn't been used
         let nonce_used = self.used_nonces.read((auction.auctioneer, auction.auctioneer_nonce));
         assert(!nonce_used, 'Nonce already used');
 
-        // Mark auctioneer nonce as used
+        // Mark nonce as used
         self.used_nonces.write((auction.auctioneer, auction.auctioneer_nonce), true);
         
         // Process bids from highest to lowest

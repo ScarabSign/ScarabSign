@@ -11,6 +11,7 @@ mod test_scarab_sign {
     use core::poseidon::PoseidonTrait;
     use core::hash::{HashStateTrait, HashStateExTrait};
     use starknet::{get_tx_info, get_caller_address};
+    use snforge_std::{start_cheat_caller_address_global};
     use scarab_sign::snip_12::{IStructHash, IOffChainMessageHash};
     use scarab_sign::snip_12::v1::StarknetDomain;
     use scarab_sign::scarab_sign::{
@@ -495,7 +496,20 @@ mod test_scarab_sign {
             deadline: 9999999999_u64,
         };
 
+        // Set caller as auctioneer before generating signature
+        start_cheat_caller_address_global(auctioneer);
+
         let auction_auth_hash = IOffChainMessageHash::<AuctionAuth>::get_message_hash(@auction_auth);
+        
+        // Debug logging for signature generation
+        let caller: felt252 = get_caller_address().try_into().unwrap();
+        let auctioneer_felt: felt252 = auctioneer.try_into().unwrap();
+        println!("=== Signature Generation ===");
+        println!("Auction auth hash: {}", auction_auth_hash);
+        println!("Caller address (felt): {}", caller);
+        println!("Auctioneer address (felt): {}", auctioneer_felt);
+        println!("========================");
+
         let (auction_signature_r, auction_signature_s): (felt252, felt252) = auctioneer_keypair.sign(auction_auth_hash).unwrap();
 
         // Create a bid
@@ -525,9 +539,6 @@ mod test_scarab_sign {
             bids: array![bid].span(),
             bid_sigs: array![array![EcdsaSignature { r: bid_signature_r, s: bid_signature_s }].span()].span(),
         };
-
-        let auction_hash = IOffChainMessageHash::<Auction>::get_message_hash(@auction);
-        let (auction_signature_r, auction_signature_s): (felt252, felt252) = auctioneer_keypair.sign(auction_hash).unwrap();
 
         // Deploy the contract
         let contract = declare("ScarabSign").unwrap().contract_class();
