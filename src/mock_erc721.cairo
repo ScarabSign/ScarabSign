@@ -19,6 +19,9 @@ mod MockERC721 {
     impl ERC721MixinImpl = ERC721Component::ERC721MixinImpl<ContractState>;
     impl ERC721InternalImpl = ERC721Component::InternalImpl<ContractState>;
 
+    // SRC5 Mixin
+    impl SRC5InternalImpl = SRC5Component::InternalImpl<ContractState>;
+
     #[storage]
     struct Storage {
         #[substorage(v0)]
@@ -41,6 +44,8 @@ mod MockERC721 {
         let name = "MyNFT";
         let symbol = "NFT";
         let base_uri = "https://api.example.com/v1/";
+        
+        // Initialize ERC721 with SRC5 support built in
         self.erc721.initializer(name, symbol, base_uri);
     }
 

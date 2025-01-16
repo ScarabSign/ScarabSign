@@ -23,6 +23,7 @@ mod test_scarab_sign {
     };
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
+    use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use snforge_std::signature::KeyPairTrait;
     use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl, StarkCurveVerifierImpl};
 
@@ -52,7 +53,7 @@ mod test_scarab_sign {
     #[test]
     fn test_token_amount_hash() {
         let token_address = starknet::contract_address_const::<0x123>();
-        let amount: felt252 = 1000;
+        let amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
 
         // Calculate hash using get_struct_hash
@@ -97,7 +98,7 @@ mod test_scarab_sign {
         // Create test data
         let bidder = starknet::contract_address_const::<0x789>();
         let token_address = starknet::contract_address_const::<0x123>();
-        let amount: felt252 = 1000;
+        let amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
         let nonce: u64 = 42;
         
@@ -137,7 +138,7 @@ mod test_scarab_sign {
         let collection_address = starknet::contract_address_const::<0x789>();
         let nft_id = 123_u256;
         let token_address = starknet::contract_address_const::<0xabc>();
-        let min_bid_amount = 1000_felt252;
+        let min_bid_amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let deadline = 1234567890_u64;
         
         // Create an empty array and convert to span for auction_sig_hash
@@ -195,13 +196,13 @@ mod test_scarab_sign {
         let mut bids = ArrayTrait::new();
         let bid1 = Bid {
             bidder: starknet::contract_address_const::<0x111>(),
-            amount: TokenAmount { token_address, amount: 2000 },
+            amount: TokenAmount { token_address, amount: u256 { low: 2000_u128, high: 0_u128 } },
             nonce: 1_u64,
             auction_sig_hash
         };
         let bid2 = Bid {
             bidder: starknet::contract_address_const::<0x222>(),
-            amount: TokenAmount { token_address, amount: 3000 },
+            amount: TokenAmount { token_address, amount: u256 { low: 3000_u128, high: 0_u128 } },
             nonce: 2_u64,
             auction_sig_hash
         };
@@ -246,7 +247,7 @@ mod test_scarab_sign {
         // Create test data
         let bidder = starknet::contract_address_const::<0x789>();
         let token_address = starknet::contract_address_const::<0x123>();
-        let amount: felt252 = 1000;
+        let amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let token_amount = TokenAmount { token_address: token_address, amount: amount };
         let nonce: u64 = 42;
         
@@ -289,7 +290,7 @@ mod test_scarab_sign {
         let collection_address = starknet::contract_address_const::<0x789>();
         let nft_id = 123_u256;
         let token_address = starknet::contract_address_const::<0xabc>();
-        let min_bid_amount = 1000_felt252;
+        let min_bid_amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let deadline = 1234567890_u64;
         
         // Create an empty array and convert to span for auction_sig_hash
@@ -341,7 +342,7 @@ mod test_scarab_sign {
         let collection_address = starknet::contract_address_const::<0x789>();
         let nft_id = 123_u256;
         let token_address = starknet::contract_address_const::<0xabc>();
-        let min_bid_amount = 1000_felt252;
+        let min_bid_amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
         let deadline = 1234567890_u64;
         
         // Create an empty array and convert to span for auction_sig_hash
@@ -355,13 +356,13 @@ mod test_scarab_sign {
         let mut bids = ArrayTrait::new();
         let bid1 = Bid {
             bidder: starknet::contract_address_const::<0x111>(),
-            amount: TokenAmount { token_address, amount: 2000 },
+            amount: TokenAmount { token_address, amount: u256 { low: 2000_u128, high: 0_u128 } },
             nonce: 1_u64,
             auction_sig_hash
         };
         let bid2 = Bid {
             bidder: starknet::contract_address_const::<0x222>(),
-            amount: TokenAmount { token_address, amount: 3000 },
+            amount: TokenAmount { token_address, amount: u256 { low: 3000_u128, high: 0_u128 } },
             nonce: 2_u64,
             auction_sig_hash
         };
@@ -421,7 +422,7 @@ mod test_scarab_sign {
         
         let min_bid = TokenAmount {
             token_address,
-            amount: 1000
+            amount: u256 { low: 1000_u128, high: 0_u128 }
         };
 
         let nft = NftId {
@@ -472,13 +473,13 @@ mod test_scarab_sign {
         let bidder: ContractAddress = bidder_keypair.public_key.try_into().unwrap();
         let auctioneer: ContractAddress = auctioneer_keypair.public_key.try_into().unwrap();
 
-        erc20_dispatcher.mint(bidder, 1000_u256);
+        erc20_dispatcher.mint(bidder, u256 { low: 1000_u128, high: 0_u128 });
         erc721_dispatcher.mint(auctioneer, 0_u256);
 
         // Create the bid amount
         let bid_amount = TokenAmount {
             token_address: erc20_address,
-            amount: 1000
+            amount: u256 { low: 1000_u128, high: 0_u128 }
         };
 
         // Create the NFT ID
@@ -525,7 +526,20 @@ mod test_scarab_sign {
             auction_sig_hash: auction_sigs.span()
         };
 
+        // Set caller as bidder for bid signature
+        start_cheat_caller_address_global(bidder);
+
         let bid_hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
+        
+        // Debug logging for bid signature generation
+        let caller: felt252 = get_caller_address().try_into().unwrap();
+        let bidder_felt: felt252 = bidder.try_into().unwrap();
+        println!("=== Bid Signature Generation ===");
+        println!("Bid hash: {}", bid_hash);
+        println!("Caller address (felt): {}", caller);
+        println!("Bidder address (felt): {}", bidder_felt);
+        println!("========================");
+
         let (bid_signature_r, bid_signature_s): (felt252, felt252) = bidder_keypair.sign(bid_hash).unwrap();
 
         // Create the final auction with the auth data, signatures and bids
@@ -544,6 +558,14 @@ mod test_scarab_sign {
         let contract = declare("ScarabSign").unwrap().contract_class();
         let empty_constructor_calldata: Array<felt252> = ArrayTrait::new();
         let (contract_address, _) = contract.deploy(@empty_constructor_calldata).unwrap();
+
+        // Approve token transfer using OpenZeppelin ERC20 interface
+        let erc20_dispatcher = IERC20Dispatcher { contract_address: erc20_address };
+        start_cheat_caller_address_global(bidder);
+        erc20_dispatcher.approve(contract_address, bid_amount.amount);
+
+        // Set caller back to auctioneer for auction consumption
+        start_cheat_caller_address_global(auctioneer);
 
         // Create the dispatcher and call consume_auction
         let contract_dispatcher = IScarabSignDispatcher { contract_address };

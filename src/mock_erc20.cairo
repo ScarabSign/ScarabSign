@@ -34,6 +34,8 @@ mod MockERC20 {
     fn constructor(ref self: ContractState) {
         let name = "MyToken";
         let symbol = "MTK";
+        
+        // Initialize ERC20
         self.erc20.initializer(name, symbol);
     }
 

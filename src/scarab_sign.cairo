@@ -6,8 +6,8 @@ use core::pedersen::PedersenTrait;
 use core::poseidon::PoseidonTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
-use crate::ERC20::{IERC20Dispatcher, IERC20DispatcherTrait};
-use crate::ERC721::{IERC721Dispatcher, IERC721DispatcherTrait};
+use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
 use core::array::SpanTrait;
 
 pub const SIGNATURE_TYPE_HASH: felt252 = 
@@ -17,19 +17,19 @@ pub const U256_TYPE_HASH: felt252 =
 	selector!("\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 pub const TOKEN_AMOUNT_TYPE_HASH: felt252 = 
-	selector!("\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")");
+	selector!("\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
 
 pub const NFT_ID_TYPE_HASH: felt252 = 
 	selector!("\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 pub const BID_TYPE_HASH: felt252 = 
-	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")");
+	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
 
 pub const AUCTION_TYPE_HASH: felt252 = 
-	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 pub const AUCTION_AUTH_TYPE_HASH: felt252 = 
-    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"felt252\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 // Add Katana chain ID constant
 const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
@@ -43,7 +43,7 @@ pub struct EcdsaSignature {
 #[derive(Drop, Copy, Hash, Serde)]
 pub struct TokenAmount {
   pub token_address: ContractAddress,
-  pub amount: felt252
+  pub amount: u256
 }
 
 #[derive(Drop, Copy, Hash, Serde)]
@@ -92,7 +92,8 @@ impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
 		let mut state = PoseidonTrait::new();
 		state = state.update_with(BID_TYPE_HASH);
 		state = state.update_with(domain.get_struct_hash());
-		state = state.update_with(get_caller_address());
+		let bidder_felt: felt252 = (*self).bidder.into();
+		state = state.update_with(bidder_felt);
 		state = state.update_with(self.get_struct_hash());
 		state.finalize()
 	}
@@ -179,9 +180,11 @@ pub impl StructHashBid of IStructHash<Bid> {
   fn get_struct_hash(self: @Bid) -> felt252 {
     let mut state = PoseidonTrait::new();
     state = state.update_with(BID_TYPE_HASH);
-    state = state.update_with(*self.bidder.into());
+    let bidder_felt: felt252 = (*self).bidder.into();
+    state = state.update_with(bidder_felt);
     state = state.update_with(self.amount.get_struct_hash());
-    state = state.update_with(*self.nonce.into());
+    let nonce_felt: felt252 = (*self.nonce).into();
+    state = state.update_with(nonce_felt);
     state = state.update_with((*self.auction_sig_hash).get_struct_hash());
     state.finalize()
   }
@@ -304,8 +307,8 @@ pub mod ScarabSign {
       Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
       StoragePointerWriteAccess,
   };
-  use crate::ERC20::{IERC20Dispatcher, IERC20DispatcherTrait};
-  use crate::ERC721::{IERC721Dispatcher, IERC721DispatcherTrait};
+  use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+  use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
   use core::traits::{Into, TryInto, PartialEq, PartialOrd};
   use core::option::OptionTrait;
   use core::array::SpanTrait;
@@ -320,7 +323,7 @@ pub mod ScarabSign {
   pub struct AuctionConsumed {
     nft: NftId,
     token: ContractAddress,
-    amount: felt252,
+    amount: u256,
     auctioneer: ContractAddress,
     winner: ContractAddress
   }
@@ -398,22 +401,33 @@ pub mod ScarabSign {
             // Skip if bid amount is less than minimum
             let bid_amount: u128 = bid.amount.amount.try_into().unwrap();
             let min_amount: u128 = auction.min_bid.amount.try_into().unwrap();
-            if bid_amount > min_amount {
+            println!("Checking bid amount {} against min amount {}", bid_amount, min_amount);
+            
+            if bid_amount >= min_amount {
                 // Check if bid nonce already used
                 let bid_nonce_used = self.used_nonces.read((bid.bidder, bid.nonce.into()));
+                println!("Bid amount sufficient. Checking nonce used: {}", bid_nonce_used);
                 
                 if !bid_nonce_used {
                     // Verify bid signature
                     let bid_hash = bid.get_message_hash();
+                    println!("=== Bid Signature Verification ===");
+                    println!("Bid hash: {}", bid_hash);
+                    let bidder_felt: felt252 = bid.bidder.into();
+                    println!("Bidder address (felt): {}", bidder_felt);
+                    println!("========================");
+                    
                     let is_valid = check_ecdsa_signature(
                         bid_hash,
                         bid.bidder.into(),
                         bid_sig.r,  // r component
                         bid_sig.s   // s component
                     );
+                    println!("Bid signature valid: {}", is_valid);
 
                     if is_valid {
                         // Add to valid bids array
+                        println!("Adding bid to valid bids array");
                         valid_bids.append((bid.bidder, bid.amount));
                         // Mark bid nonce as used
                         self.used_nonces.write((bid.bidder, bid.nonce.into()), true);
@@ -423,6 +437,8 @@ pub mod ScarabSign {
             
             i += 1;
         };
+
+        println!("Found {} valid bids", valid_bids.len());
 
         // Sort valid_bids by amount (highest first)
         // Note: Implement sorting logic here
@@ -437,15 +453,23 @@ pub mod ScarabSign {
             }
 
             let (bidder, amount) = *valid_bids.at(j);
+            println!("Attempting transfer for bid {}", j);
             
             // Try to transfer tokens from bidder
             let token_contract = IERC20Dispatcher { contract_address: amount.token_address };
+            let bidder_felt: felt252 = bidder.into();
+            let auctioneer_felt: felt252 = auction.auctioneer.into();
+            println!("Transferring {} tokens from {} to {}", amount.amount, bidder_felt, auctioneer_felt);
+            
+            // Will panic on failure, no need to handle Result
             token_contract.transfer_from(bidder, auction.auctioneer, amount.amount);
-            // No return value to check, will panic on failure
+            println!("Transfer successful");
             successful_bid = Option::Some((bidder, amount));
             break;
+            
+            j += 1;
         };
-
+        
         match successful_bid {
             Option::Some((winner, amount)) => {
                 // Transfer NFT to winner
