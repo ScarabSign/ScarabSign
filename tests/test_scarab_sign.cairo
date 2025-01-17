@@ -26,8 +26,7 @@ mod test_scarab_sign {
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use openzeppelin_token::erc721::interface::{IERC721Dispatcher};
-
+    use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
     // Update KATANA_CHAIN_ID to match implementation
     const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
 
@@ -553,10 +552,21 @@ mod test_scarab_sign {
         erc20_dispatcher.approve(scarab_sign_address, bid_amount.amount);
         erc20_dispatcher.approve(auction.auctioneer, bid_amount.amount);
 
+        // Get initial balances
+        let initial_token_balance = erc20_dispatcher.balance_of(auction.auctioneer);
+
         // Set caller back to auctioneer for auction consumption
         start_cheat_caller_address_global(auctioneer);
 
         // Create the dispatcher and call consume_auction
         scarab_sign_dispatcher.consume_auction(auction, auction_signature_r, auction_signature_s);
+
+        // Verify final state
+        let final_nft_owner = erc721_dispatcher.owner_of(nft.nft_id);
+        assert(final_nft_owner == bidder, 'NFT transfer failed');
+        
+        let final_token_balance = erc20_dispatcher.balance_of(auction.auctioneer);
+        let expected_balance = initial_token_balance + bid_amount.amount;
+        assert(final_token_balance == expected_balance, 'Token transfer failed');
     }
 }
