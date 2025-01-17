@@ -4,14 +4,18 @@ mod test_scarab_sign {
     use core::traits::Into;
     use core::result::ResultTrait;
     use core::option::OptionTrait;
-    use starknet::ContractAddress;
     use core::starknet::contract_address_const;
-    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
     use core::array::ArrayTrait;
     use core::poseidon::PoseidonTrait;
     use core::hash::{HashStateTrait, HashStateExTrait};
+    
+    use starknet::ContractAddress;
     use starknet::{get_tx_info, get_caller_address};
+    
+    use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
     use snforge_std::{start_cheat_caller_address_global};
+    use snforge_std::signature::KeyPairTrait;
+    use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl, StarkCurveVerifierImpl};
     use scarab_sign::snip_12::{IStructHash, IOffChainMessageHash};
     use scarab_sign::snip_12::v1::StarknetDomain;
     use scarab_sign::scarab_sign::{
@@ -24,8 +28,7 @@ mod test_scarab_sign {
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use snforge_std::signature::KeyPairTrait;
-    use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl, StarkCurveVerifierImpl};
+    use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
 
     #[test]
     fn test_basic() {
@@ -459,13 +462,18 @@ mod test_scarab_sign {
     fn test_consume_auction() {
         let erc20 = declare("MockERC20").unwrap().contract_class();
         let erc721 = declare("MockERC721").unwrap().contract_class();
-        
+        let scarab_sign = declare("ScarabSign").unwrap().contract_class();
+
         let constructor_calldata: Array<felt252> = ArrayTrait::new();
         let (erc20_address, _) = erc20.deploy(@constructor_calldata).unwrap();
         let (erc721_address, _) = erc721.deploy(@constructor_calldata).unwrap();
+        let (scarab_sign_address, _) = scarab_sign.deploy(@constructor_calldata).unwrap();
 
-        let erc20_dispatcher = IMockERC20Dispatcher { contract_address: erc20_address };
-        let erc721_dispatcher = IMockERC721Dispatcher { contract_address: erc721_address };
+        let mock_erc20_dispatcher = IMockERC20Dispatcher { contract_address: erc20_address };
+        let erc20_dispatcher = IERC20Dispatcher { contract_address: erc20_address };
+        let mock_erc721_dispatcher = IMockERC721Dispatcher { contract_address: erc721_address };
+        let erc721_dispatcher = IERC721Dispatcher { contract_address: erc721_address };
+        let scarab_sign_dispatcher = IScarabSignDispatcher { contract_address: scarab_sign_address };
         
         let bidder_keypair = KeyPairTrait::<felt252, felt252>::generate();
         let auctioneer_keypair = KeyPairTrait::<felt252, felt252>::generate();
@@ -473,8 +481,8 @@ mod test_scarab_sign {
         let bidder: ContractAddress = bidder_keypair.public_key.try_into().unwrap();
         let auctioneer: ContractAddress = auctioneer_keypair.public_key.try_into().unwrap();
 
-        erc20_dispatcher.mint(bidder, u256 { low: 1000_u128, high: 0_u128 });
-        erc721_dispatcher.mint(auctioneer, 0_u256);
+        mock_erc20_dispatcher.mint(bidder, u256 { low: 1000_u128, high: 0_u128 });
+        mock_erc721_dispatcher.mint(auctioneer, 0_u256);
 
         // Create the bid amount
         let bid_amount = TokenAmount {
@@ -530,17 +538,8 @@ mod test_scarab_sign {
         start_cheat_caller_address_global(bidder);
 
         let bid_hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
-        
-        // Debug logging for bid signature generation
-        let caller: felt252 = get_caller_address().try_into().unwrap();
-        let bidder_felt: felt252 = bidder.try_into().unwrap();
-        println!("=== Bid Signature Generation ===");
-        println!("Bid hash: {}", bid_hash);
-        println!("Caller address (felt): {}", caller);
-        println!("Bidder address (felt): {}", bidder_felt);
-        println!("========================");
-
         let (bid_signature_r, bid_signature_s): (felt252, felt252) = bidder_keypair.sign(bid_hash).unwrap();
+        let bid_sig = EcdsaSignature { r: bid_signature_r, s: bid_signature_s };
 
         // Create the final auction with the auth data, signatures and bids
         let auction = Auction {
@@ -551,24 +550,20 @@ mod test_scarab_sign {
             deadline: auction_auth.deadline,
             auction_sig_hash: auction_sigs.span(),
             bids: array![bid].span(),
-            bid_sigs: array![array![EcdsaSignature { r: bid_signature_r, s: bid_signature_s }].span()].span(),
+            bid_sigs: array![array![bid_sig].span()].span(),
         };
 
         // Deploy the contract
-        let contract = declare("ScarabSign").unwrap().contract_class();
-        let empty_constructor_calldata: Array<felt252> = ArrayTrait::new();
-        let (contract_address, _) = contract.deploy(@empty_constructor_calldata).unwrap();
 
         // Approve token transfer using OpenZeppelin ERC20 interface
-        let erc20_dispatcher = IERC20Dispatcher { contract_address: erc20_address };
         start_cheat_caller_address_global(bidder);
-        erc20_dispatcher.approve(contract_address, bid_amount.amount);
+        erc20_dispatcher.approve(scarab_sign_address, bid_amount.amount);
+        erc20_dispatcher.approve(auction.auctioneer, bid_amount.amount);
 
         // Set caller back to auctioneer for auction consumption
         start_cheat_caller_address_global(auctioneer);
 
         // Create the dispatcher and call consume_auction
-        let contract_dispatcher = IScarabSignDispatcher { contract_address };
-        contract_dispatcher.consume_auction(auction, auction_signature_r, auction_signature_s);
+        scarab_sign_dispatcher.consume_auction(auction, auction_signature_r, auction_signature_s);
     }
 }
