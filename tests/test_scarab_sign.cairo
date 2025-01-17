@@ -30,6 +30,8 @@ mod test_scarab_sign {
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
 
+    const KATANA_CHAIN_ID: felt252 = 0x1234567890abcdef;
+
     #[test]
     fn test_basic() {
         assert(1 == 1, 'basic test');
@@ -247,23 +249,17 @@ mod test_scarab_sign {
 
     #[test]
     fn test_off_chain_message_hash_bid() {
-        // Create test data
         let bidder = starknet::contract_address_const::<0x789>();
         let token_address = starknet::contract_address_const::<0x123>();
         let amount: u256 = u256 { low: 1000_u128, high: 0_u128 };
-        let token_amount = TokenAmount { token_address: token_address, amount: amount };
-        let nonce: u64 = 42;
-        
+        let nonce = 123_u64;
+
         // Create an empty array and convert to span for auction_sig_hash
         let mut empty_sigs: Array<EcdsaSignature> = ArrayTrait::new();
         let auction_sig_hash: Span<EcdsaSignature> = empty_sigs.span();
 
-        let bid = Bid { 
-            bidder: bidder, 
-            amount: token_amount, 
-            nonce: nonce, 
-            auction_sig_hash: auction_sig_hash 
-        };
+        let token_amount = TokenAmount { token_address, amount };
+        let bid = Bid { bidder, amount: token_amount, nonce, auction_sig_hash };
 
         // Get message hash
         let hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
@@ -272,14 +268,14 @@ mod test_scarab_sign {
         let domain = StarknetDomain {
             name: 'scarab_auction', 
             version: '1', 
-            chain_id: get_tx_info().unbox().chain_id, 
+            chain_id: KATANA_CHAIN_ID,
             revision: 1
         };
         let mut state = PoseidonTrait::new();
         state = state.update_with(BID_TYPE_HASH);
         state = state.update_with(IStructHash::<StarknetDomain>::get_struct_hash(@domain));
-        let caller_felt: felt252 = get_caller_address().into();
-        state = state.update_with(caller_felt);
+        let bidder_felt: felt252 = bidder.into();
+        state = state.update_with(bidder_felt);
         state = state.update_with(IStructHash::<Bid>::get_struct_hash(@bid));
         let expected_hash = state.finalize();
 
@@ -324,14 +320,14 @@ mod test_scarab_sign {
         let domain = StarknetDomain {
             name: 'scarab_auction', 
             version: '1', 
-            chain_id: get_tx_info().unbox().chain_id, 
+            chain_id: KATANA_CHAIN_ID,
             revision: 1
         };
         let mut state = PoseidonTrait::new();
         state = state.update_with(AUCTION_TYPE_HASH);
         state = state.update_with(IStructHash::<StarknetDomain>::get_struct_hash(@domain));
-        let caller_felt: felt252 = get_caller_address().into();
-        state = state.update_with(caller_felt);
+        let auctioneer_felt: felt252 = auctioneer.into();
+        state = state.update_with(auctioneer_felt);
         state = state.update_with(IStructHash::<Auction>::get_struct_hash(@auction));
         let expected_hash = state.finalize();
 
