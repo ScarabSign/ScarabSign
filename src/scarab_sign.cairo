@@ -1,13 +1,8 @@
-use core::starknet::eth_address::EthAddress;
 use core::starknet::ContractAddress;
-use starknet::secp256_trait::{Signature};
-use starknet::{get_tx_info, get_caller_address};
-use core::pedersen::PedersenTrait;
+use starknet::{get_caller_address};
 use core::poseidon::PoseidonTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
-use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
 use core::array::SpanTrait;
 
 pub const SIGNATURE_TYPE_HASH: felt252 = 
@@ -297,19 +292,17 @@ pub trait IScarabSign<TContractState> {
 #[starknet::contract]
 pub mod ScarabSign {
 
-  use super::IScarabSign;
-  use starknet::secp256k1::Secp256k1Point;
   use core::ecdsa::check_ecdsa_signature;
   use core::starknet::ContractAddress;
-  use starknet::{get_tx_info, get_caller_address};
-  use super::{Auction, IOffChainMessageHash, TokenAmount, Bid,NftId};
+  use starknet::{get_caller_address};
+  use super::{Auction, IOffChainMessageHash, TokenAmount,NftId};
   use starknet::storage::{
-      Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
-      StoragePointerWriteAccess,
+      Map, StorageMapReadAccess, StorageMapWriteAccess,
+      
   };
   use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
   use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
-  use core::traits::{Into, TryInto, PartialEq, PartialOrd};
+  use core::traits::{Into, TryInto };
   use core::option::OptionTrait;
   use core::array::SpanTrait;
 
@@ -465,9 +458,9 @@ pub mod ScarabSign {
             token_contract.transfer_from(bidder, auction.auctioneer, amount.amount);
             println!("Transfer successful");
             successful_bid = Option::Some((bidder, amount));
+            j += 1;
             break;
             
-            j += 1;
         };
         
         match successful_bid {

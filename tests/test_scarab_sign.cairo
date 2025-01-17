@@ -1,16 +1,14 @@
 #[cfg(test)]
 mod test_scarab_sign {
-    use core::array::SpanTrait;
     use core::traits::Into;
     use core::result::ResultTrait;
     use core::option::OptionTrait;
-    use core::starknet::contract_address_const;
     use core::array::ArrayTrait;
     use core::poseidon::PoseidonTrait;
     use core::hash::{HashStateTrait, HashStateExTrait};
     
     use starknet::ContractAddress;
-    use starknet::{get_tx_info, get_caller_address};
+    use starknet::{get_caller_address};
     
     use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
     use snforge_std::{start_cheat_caller_address_global};
@@ -28,7 +26,7 @@ mod test_scarab_sign {
     use scarab_sign::mock_erc20::{IMockERC20Dispatcher, IMockERC20DispatcherTrait};
     use scarab_sign::mock_erc721::{IMockERC721Dispatcher, IMockERC721DispatcherTrait};
     use openzeppelin_token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
-    use openzeppelin_token::erc721::interface::{IERC721Dispatcher, IERC721DispatcherTrait};
+    use openzeppelin_token::erc721::interface::{IERC721Dispatcher};
 
     // Update KATANA_CHAIN_ID to match implementation
     const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
