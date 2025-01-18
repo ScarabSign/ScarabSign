@@ -20,5 +20,18 @@ url = "http://127.0.0.1:5050"
 
 [sncast.devnet]
 account = "devnet"
-accounts-file = "/home/thdev/.starknet_accounts/starknet_open_zeppelin_accounts.json"
+accounts-file = "$STARKNET_ACCOUNTS_FILE"
 url = "http://127.0.0.1:5050"
+
+[sncast.testnet]
+account = "testnet"
+accounts-file = "$STARKNET_ACCOUNTS_FILE"
+url = "$RPC_URL"
+max_fee = "0xFFFFFFFFFFFFFF"
+
+
+[sncast.sepolia-test]
+url = "$RPC_URL"
+account = "testnet"
+accounts-file = "$STARKNET_ACCOUNTS_FILE"
+deployed_contracts = { ScarabSign = "0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee", MockERC721 = "0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e", MockERC20 = "0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429" }

@@ -1,0 +1,8 @@
+[package]
+name = "mint_coins"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.9.2"
+sncast_std = "0.35.1"

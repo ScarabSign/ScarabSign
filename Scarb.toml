@@ -7,11 +7,14 @@ edition = "2024_07"
 
 [workspace]
 members = [
-    "scripts",
+    "scripts/deploy",
+    "scripts/mint_nft",
+    "scripts/mint_coins",
 ]
 
 [dependencies]
 starknet = "2.9.2"
+sncast_std = "0.35.1"
 openzeppelin = "0.20.0"
 openzeppelin_token = "0.20.0"
 openzeppelin_introspection = "0.20.0"
@@ -22,7 +25,6 @@ assert_macros = "2.9.2"
 
 [[target.starknet-contract]]
 sierra = true
-casm = true
 
 [scripts]
 test = "snforge test"
@@ -69,3 +71,12 @@ private_key = "0x1800000000300000180000000000030000000000003006001800006600"
 url = "https://starknet-sepolia.public.blastapi.io"
 account_deployment_data = { class_hash = "0x04d07e40e93398ed3c76981e72dd1fd22557a78ce36c0515f679e27f0bb5bc5f" }
 account_class = { class_hash = "0x04d07e40e93398ed3c76981e72dd1fd22557a78ce36c0515f679e27f0bb5bc5f" }
+
+[profile.release]
+sierra = true
+sierra-replace-ids = true
+
+[profile.sepolia-test]
+url = "$RPC_URL"
+account = "testnet"
+accounts-file = "$STARKNET_ACCOUNTS_FILE"

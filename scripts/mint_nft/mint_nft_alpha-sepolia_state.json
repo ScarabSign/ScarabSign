@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "transactions": {
+    "transactions": {
+      "2cec18d57d6fc917eba9d7b10405743a9273027287a829b747621a02a0cfef78": {
+        "name": "invoke",
+        "output": {
+          "type": "ErrorResponse",
+          "message": "Transaction has been reverted = Transaction execution has failed:\n0: Error in the called contract (contract address: 0x0120a0ed288eb6dc069816c1453210f8e30093412725da8c66e99022c66ca349, class hash: 0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc, selector: 0x015d40a3d6ca2ac30f4031e42be28da9b056fef9bb7357ac5e85627ee876e5ad):\nError at pc=0:25403:\nCairo traceback (most recent call last):\nUnknown location (pc=0:621)\nUnknown location (pc=0:10302)\n\n1: Error in the called contract (contract address: 0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e, class hash: 0x011f837c94c12b9a0b1fee8548d559b962973cf9e041283c7095ac7879b2f7e2, selector: 0x02f0b3c5710379609eb5495f1ecd348cb28167711b73609fe565a72734550354):\nExecution failed. Failure reason: 0x4661696c656420746f20646573657269616c697a6520706172616d202332 ('Failed to deserialize param #2').\n"
+        },
+        "status": "Fail",
+        "timestamp": 1737238545,
+        "misc": null
+      },
+      "8f8be33b3ec25d8cbccb79ac0438f93d1079bc50b9f3322dcf9e99ddb5d04ce4": {
+        "name": "invoke",
+        "output": {
+          "type": "InvokeResponse",
+          "transaction_hash": "0x06a45476c7d64e0142126f26910ec724eec2804df81ab70ceb8376a13d402626"
+        },
+        "status": "Success",
+        "timestamp": 1737239070,
+        "misc": null
+      }
+    }
+  }
+}

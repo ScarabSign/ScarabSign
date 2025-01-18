@@ -48,6 +48,14 @@ struct Auction {
 - Timestamp manipulation prevention
 - Front-running protection
 
+
+## Deployments - Sepolia
+Name   | Contract Address |
+| --- | --- |
+|Scarab Sign| [0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee](https://sepolia.starkscan.co/contract/0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee) |
+|Mock ERC721| [0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e](https://sepolia.starkscan.co/contract/0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e)|
+|Mock ERC20| [0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429](https://sepolia.starkscan.co/contract/0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429)|
+
 ## Contributing
 
 We welcome contributions! Please check our [Contributing Guidelines](CONTRIBUTING.md) for details.

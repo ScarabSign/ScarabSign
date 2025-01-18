@@ -2,6 +2,27 @@
 version = 1
 
 [[package]]
+name = "deploy_scarab_sign"
+version = "0.1.0"
+dependencies = [
+ "sncast_std",
+]
+
+[[package]]
+name = "mint_coins"
+version = "0.1.0"
+dependencies = [
+ "sncast_std",
+]
+
+[[package]]
+name = "mint_nft"
+version = "0.1.0"
+dependencies = [
+ "sncast_std",
+]
+
+[[package]]
 name = "openzeppelin"
 version = "0.20.0"
 source = "registry+https://scarbs.xyz/"
@@ -126,14 +147,8 @@ dependencies = [
  "openzeppelin",
  "openzeppelin_introspection",
  "openzeppelin_token",
- "snforge_std",
-]
-
-[[package]]
-name = "scarab_sign_scripts"
-version = "0.1.0"
-dependencies = [
  "sncast_std",
+ "snforge_std",
 ]
 
 [[package]]

@@ -349,11 +349,6 @@ pub mod ScarabSign {
         // Debug logging for signature verification
         let caller: felt252 = get_caller_address().try_into().unwrap();
         let auctioneer: felt252 = auction.auctioneer.try_into().unwrap();
-        println!("=== Signature Verification ===");
-        println!("Auction auth hash: {}", auction_auth_hash);
-        println!("Caller address (felt): {}", caller);
-        println!("Auctioneer address (felt): {}", auctioneer);
-        println!("========================");
         
         // Verify the signature is from the auctioneer
         let is_valid = check_ecdsa_signature(
@@ -394,21 +389,14 @@ pub mod ScarabSign {
             // Skip if bid amount is less than minimum
             let bid_amount: u128 = bid.amount.amount.try_into().unwrap();
             let min_amount: u128 = auction.min_bid.amount.try_into().unwrap();
-            println!("Checking bid amount {} against min amount {}", bid_amount, min_amount);
             
             if bid_amount >= min_amount {
                 // Check if bid nonce already used
                 let bid_nonce_used = self.used_nonces.read((bid.bidder, bid.nonce.into()));
-                println!("Bid amount sufficient. Checking nonce used: {}", bid_nonce_used);
                 
                 if !bid_nonce_used {
                     // Verify bid signature
                     let bid_hash = bid.get_message_hash();
-                    println!("=== Bid Signature Verification ===");
-                    println!("Bid hash: {}", bid_hash);
-                    let bidder_felt: felt252 = bid.bidder.into();
-                    println!("Bidder address (felt): {}", bidder_felt);
-                    println!("========================");
                     
                     let is_valid = check_ecdsa_signature(
                         bid_hash,
@@ -416,11 +404,9 @@ pub mod ScarabSign {
                         bid_sig.r,  // r component
                         bid_sig.s   // s component
                     );
-                    println!("Bid signature valid: {}", is_valid);
 
                     if is_valid {
                         // Add to valid bids array
-                        println!("Adding bid to valid bids array");
                         valid_bids.append((bid.bidder, bid.amount));
                         // Mark bid nonce as used
                         self.used_nonces.write((bid.bidder, bid.nonce.into()), true);
@@ -431,7 +417,6 @@ pub mod ScarabSign {
             i += 1;
         };
 
-        println!("Found {} valid bids", valid_bids.len());
 
         // Sort valid_bids by amount (highest first)
         // Note: Implement sorting logic here
@@ -446,17 +431,11 @@ pub mod ScarabSign {
             }
 
             let (bidder, amount) = *valid_bids.at(j);
-            println!("Attempting transfer for bid {}", j);
             
             // Try to transfer tokens from bidder
             let token_contract = IERC20Dispatcher { contract_address: amount.token_address };
-            let bidder_felt: felt252 = bidder.into();
-            let auctioneer_felt: felt252 = auction.auctioneer.into();
-            println!("Transferring {} tokens from {} to {}", amount.amount, bidder_felt, auctioneer_felt);
-            
             // Will panic on failure, no need to handle Result
             token_contract.transfer_from(bidder, auction.auctioneer, amount.amount);
-            println!("Transfer successful");
             successful_bid = Option::Some((bidder, amount));
             j += 1;
             break;

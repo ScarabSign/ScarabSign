@@ -1,5 +1,5 @@
 [package]
-name = "scarab_sign_scripts"
+name = "deploy_scarab_sign"
 version = "0.1.0"
 edition = "2024_07"
 
@@ -8,8 +8,6 @@ starknet = "2.9.2"
 sncast_std = "0.35.1"
 
 [[target.starknet-contract]]
-sierra = true
-casm = true
-
-[scripts]
-deploy = "src/deploy.cairo"
+build-external-contracts = [
+    "map::ScarabSign"
+]
