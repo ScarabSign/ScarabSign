@@ -130,6 +130,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "scarab_sign_scripts"
+version = "0.1.0"
+dependencies = [
+ "sncast_std",
+]
+
+[[package]]
+name = "sncast_std"
+version = "0.35.1"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:625a19b8e407d37dad6cccff6102bbb0c37670f538a3b271f6621e20678100f7"
+
+[[package]]
 name = "snforge_scarb_plugin"
 version = "0.35.1"
 source = "registry+https://scarbs.xyz/"

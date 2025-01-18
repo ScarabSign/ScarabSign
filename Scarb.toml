@@ -5,12 +5,16 @@ edition = "2024_07"
 
 # See more keys and their definitions at https://docs.swmansion.com/scarb/docs/reference/manifest.html
 
+[workspace]
+members = [
+    "scripts",
+]
+
 [dependencies]
 starknet = "2.9.2"
 openzeppelin = "0.20.0"
 openzeppelin_token = "0.20.0"
 openzeppelin_introspection = "0.20.0"
-
 
 [dev-dependencies]
 snforge_std = "0.35.1"
@@ -18,6 +22,7 @@ assert_macros = "2.9.2"
 
 [[target.starknet-contract]]
 sierra = true
+casm = true
 
 [scripts]
 test = "snforge test"
@@ -51,3 +56,16 @@ test = "snforge test"
 
 # [features]                                                 # Used for conditional compilation
 # enable_for_tests = []                                      # Feature name and list of other features that should be enabled with it
+
+[tool.snforge]
+# Local development network (Katana)
+[tool.snforge.local]
+url = "http://127.0.0.1:5050"
+account_address = "0x517ececd29116499f4a1b64b094da79ba08dfd54a3edaa316134c41f8160973"
+private_key = "0x1800000000300000180000000000030000000000003006001800006600"
+
+# Sepolia testnet
+[tool.snforge.sepolia]
+url = "https://starknet-sepolia.public.blastapi.io"
+account_deployment_data = { class_hash = "0x04d07e40e93398ed3c76981e72dd1fd22557a78ce36c0515f679e27f0bb5bc5f" }
+account_class = { class_hash = "0x04d07e40e93398ed3c76981e72dd1fd22557a78ce36c0515f679e27f0bb5bc5f" }

@@ -4,8 +4,21 @@
 # [sncast.default]                                         # Define a profile name
 # url = "https://free-rpc.nethermind.io/sepolia-juno/v0_7" # Url of the RPC provider
 # accounts-file = "../account-file"                        # Path to the file with the account data
-# account = "mainuser"                                     # Account from `accounts_file` or default account file that will be used for the transactions
+# account = "mainuser"                                     # Account from `accounts-file` or default account file that will be used for the transactions
 # keystore = "~/keystore"                                  # Path to the keystore file
 # wait-params = { timeout = 300, retry-interval = 10 }     # Wait for submitted transaction parameters
 # block-explorer = "StarkScan"                             # Block explorer service used to display links to transaction details
 # show-explorer-links = true                               # Print links pointing to pages with transaction details in the chosen block explorer
+
+[profile.devnet.account]
+account_address = "0x034ba56f92265f0868c57d3fe72ecab144fc96f97954bbbc4252cef8e8a979ba"
+private_key = "0x00000000000000000000000000000000b137668388dbe9acdfa3bc734cc2c469"
+public_key = "0x05a5e37c60e77a0318643b111f88413a76af6233c891a0cfb2804106372006d4"
+
+[profile.devnet]
+url = "http://127.0.0.1:5050"
+
+[sncast.devnet]
+account = "devnet"
+accounts-file = "/home/thdev/.starknet_accounts/starknet_open_zeppelin_accounts.json"
+url = "http://127.0.0.1:5050"
