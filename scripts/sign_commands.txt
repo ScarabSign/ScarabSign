@@ -1,0 +1,13 @@
+# 1. Sign the auction auth message (as auctioneer)
+sncast --profile auctioneer sign-message --message <auction_auth_hash>
+
+# 2. Sign the bid message (as bidder)
+sncast --profile bidder sign-message --message <bid_hash>
+
+# 3. Sign the final auction message (as auctioneer again)
+sncast --profile auctioneer sign-message --message <auction_hash>
+
+# Note: You'll need to:
+# 1. Have two different profiles in sncast config: 'auctioneer' and 'bidder'
+# 2. Replace <auction_auth_hash>, <bid_hash>, and <auction_hash> with the actual hashes from the script
+# 3. Run these commands in order as they build on each other

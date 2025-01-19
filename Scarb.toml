@@ -10,6 +10,7 @@ members = [
     "scripts/deploy",
     "scripts/mint_nft",
     "scripts/mint_coins",
+    "scripts/authorize_auction",
 ]
 
 [dependencies]
@@ -25,6 +26,7 @@ assert_macros = "2.9.2"
 
 [[target.starknet-contract]]
 sierra = true
+casm = true
 
 [scripts]
 test = "snforge test"

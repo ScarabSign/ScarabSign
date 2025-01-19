@@ -1,0 +1,18 @@
+[package]
+name = "authorize_auction"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.9.2"
+sncast_std = "0.35.1"
+scarab_sign = { path = "../../" }
+
+[lib]
+sierra = true
+
+[scripts]
+authorize-auction = "src/lib.cairo"
+
+[profile.dev]
+sierra-replace-ids = true

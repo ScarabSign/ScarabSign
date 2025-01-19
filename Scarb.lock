@@ -2,6 +2,14 @@
 version = 1
 
 [[package]]
+name = "authorize_auction"
+version = "0.1.0"
+dependencies = [
+ "scarab_sign",
+ "sncast_std",
+]
+
+[[package]]
 name = "deploy_scarab_sign"
 version = "0.1.0"
 dependencies = [
