@@ -39,27 +39,77 @@ struct Auction {
 
 ## Getting Started
 
-[Coming Soon]
+### Prerequisites
+- Scarb
+- snforge
+- sncast
+- Starknet account with testnet ETH
+
+### Setup and Testing
+
+1. Clone the repository and set up environment:
+```bash
+git clone https://github.com/your-org/scarab-sign.git
+cd scarab-sign
+cp .env.example .env
+source .env
+```
+
+2. Run the test suite:
+```bash
+snforge test
+```
+
+3. Deploy and initialize contracts:
+```bash
+# Authorize auction functionality
+sncast --profile sepolia-test script run authorize_auction --package authorize_auction
+
+# Deploy contracts
+sncast --profile sepolia-test script run deploy --package deploy
+
+# Mint test tokens
+sncast --profile sepolia-test script run mint_coins --package mint_coins
+
+# Mint test NFTs
+sncast --profile sepolia-test script run mint_nft --package mint_nft
+```
 
 ## Security Considerations
 
-- Pedersen collision resistance
-- Signature verification process
-- Timestamp manipulation prevention
-- Front-running protection
-
+- **Pedersen Collision Resistance**: Our implementation relies on the proven collision resistance of Pedersen hash
+- **Signature Verification Process**: Robust verification ensures bid authenticity
+- **Timestamp Manipulation Prevention**: Secure timestamp handling prevents auction manipulation
+- **Front-running Protection**: Built-in mechanisms to prevent front-running attacks
 
 ## Deployments - Sepolia
-Name   | Contract Address |
+
+| Name | Contract Address |
 | --- | --- |
-|Scarab Sign| [0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee](https://sepolia.starkscan.co/contract/0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee) |
-|Mock ERC721| [0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e](https://sepolia.starkscan.co/contract/0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e)|
-|Mock ERC20| [0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429](https://sepolia.starkscan.co/contract/0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429)|
+| Scarab Sign | [0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee](https://sepolia.starkscan.co/contract/0x0035cc91dcb3c458bb619c942225735e942616a9261fcc14ae12dc9d86e1c6ee) |
+| Mock ERC721 | [0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e](https://sepolia.starkscan.co/contract/0x064f4cbef551b0d9eabf29439ce4bba23548b33f5d3d91dda35acc0ffe2a853e) |
+| Mock ERC20 | [0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429](https://sepolia.starkscan.co/contract/0x05b726cfeaf1e97aa9e742ba910e38b2efa3d2bba4e48740c967e201b456d429) |
+
+## Environment Variables
+
+Your `.env` file should contain:
+```env
+STARKNET_ACCOUNT=your_account_address
+STARKNET_PRIVATE_KEY=your_private_key
+```
 
 ## Contributing
 
-We welcome contributions! Please check our [Contributing Guidelines](CONTRIBUTING.md) for details.
+We welcome contributions! Please check our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+- Code style and standards
+- Development workflow
+- Testing requirements
+- Pull request process
 
 ## License
 
 MIT
+
+---
+
+Built with ❤️ by the ScarabSign team
