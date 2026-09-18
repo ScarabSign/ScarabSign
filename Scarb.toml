@@ -19,6 +19,7 @@ sncast_std = "0.35.1"
 openzeppelin = "0.20.0"
 openzeppelin_token = "0.20.0"
 openzeppelin_introspection = "0.20.0"
+openzeppelin_account = "0.20.0"
 
 [dev-dependencies]
 snforge_std = "0.35.1"

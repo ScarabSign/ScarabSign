@@ -1,5 +1,5 @@
 use core::starknet::ContractAddress;
-use starknet::{get_caller_address};
+use starknet::get_tx_info;
 use core::poseidon::PoseidonTrait;
 use core::hash::{HashStateTrait, HashStateExTrait};
 use crate::snip_12::{IOffChainMessageHash, IStructHash, v1::StarknetDomain};
@@ -17,17 +17,21 @@ pub const TOKEN_AMOUNT_TYPE_HASH: felt252 =
 pub const NFT_ID_TYPE_HASH: felt252 = 
 	selector!("\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-pub const BID_TYPE_HASH: felt252 = 
-	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
+// Field types must be ones SNIP-12 revision 1 actually defines (verified against
+// starknet.js's encoder): "u64" and "felt252" are not SNIP-12 base types - "u64" isn't
+// a base type at all, and the felt type is spelled "felt", not "felt252" - so any
+// SNIP-12-compliant signer (wallet or library) would throw or produce a mismatched hash
+// against the original constants below. "auction_sig_hash"/"bid_sigs" are pre-hashed
+// signature-span digests (see StructHashSpanEcdsaSignature et al.), so they're encoded
+// as opaque felts here rather than as nested structs/arrays.
+pub const BID_TYPE_HASH: felt252 =
+	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"felt\",\"auction_sig_hash\":\"felt\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
 
-pub const AUCTION_TYPE_HASH: felt252 = 
-	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+pub const AUCTION_TYPE_HASH: felt252 =
+	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"felt\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"felt\",\"auction_sig_hash\":\"felt\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"felt\",\"auction_sig_hash\":\"felt\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-pub const AUCTION_AUTH_TYPE_HASH: felt252 = 
-    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
-
-// Add Katana chain ID constant
-const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
+pub const AUCTION_AUTH_TYPE_HASH: felt252 =
+    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"felt\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"felt\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 #[derive(Drop, Copy, Hash, Serde)]
 pub struct EcdsaSignature {
@@ -79,9 +83,9 @@ pub struct AuctionAuth {
 impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
 	fn get_message_hash(self: @Bid) -> felt252 {
 		let domain = StarknetDomain {
-			name: 'scarab_auction', 
-			version: '1', 
-			chain_id: KATANA_CHAIN_ID,
+			name: 'scarab_auction',
+			version: '1',
+			chain_id: get_tx_info().unbox().chain_id,
 			revision: 1
 		};
 		let mut state = PoseidonTrait::new();
@@ -97,15 +101,16 @@ impl OffChainMessageHashBid of IOffChainMessageHash<Bid> {
 impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 	fn get_message_hash(self: @Auction) -> felt252 {
 		let domain = StarknetDomain {
-			name: 'scarab_auction', 
-			version: '1', 
-			chain_id: KATANA_CHAIN_ID,
+			name: 'scarab_auction',
+			version: '1',
+			chain_id: get_tx_info().unbox().chain_id,
 			revision: 1
 		};
 		let mut state = PoseidonTrait::new();
 		state = state.update_with(AUCTION_TYPE_HASH);
 		state = state.update_with(domain.get_struct_hash());
-		state = state.update_with(get_caller_address());
+		let auctioneer_felt: felt252 = (*self).auctioneer.into();
+		state = state.update_with(auctioneer_felt);
 		state = state.update_with(self.get_struct_hash());
 		state.finalize()
 	}
@@ -114,15 +119,16 @@ impl OffChainMessageHashAuction of IOffChainMessageHash<Auction> {
 impl OffChainMessageHashAuctionAuth of IOffChainMessageHash<AuctionAuth> {
     fn get_message_hash(self: @AuctionAuth) -> felt252 {
         let domain = StarknetDomain {
-            name: 'scarab_auction', 
-            version: '1', 
-            chain_id: KATANA_CHAIN_ID,
+            name: 'scarab_auction',
+            version: '1',
+            chain_id: get_tx_info().unbox().chain_id,
             revision: 1
         };
         let mut state = PoseidonTrait::new();
         state = state.update_with(AUCTION_AUTH_TYPE_HASH);
         state = state.update_with(domain.get_struct_hash());
-        state = state.update_with(get_caller_address());
+        let auctioneer_felt: felt252 = (*self).auctioneer.into();
+        state = state.update_with(auctioneer_felt);
         state = state.update_with(self.get_struct_hash());
         state.finalize()
     }
@@ -292,9 +298,8 @@ pub trait IScarabSign<TContractState> {
 #[starknet::contract]
 pub mod ScarabSign {
 
-  use core::ecdsa::check_ecdsa_signature;
   use core::starknet::ContractAddress;
-  use starknet::{get_caller_address};
+  use openzeppelin_account::interface::{ISRC6Dispatcher, ISRC6DispatcherTrait};
   use super::{Auction, IOffChainMessageHash, TokenAmount,NftId};
   use starknet::storage::{
       Map, StorageMapReadAccess, StorageMapWriteAccess,
@@ -345,18 +350,12 @@ pub mod ScarabSign {
         
         // Get the auction auth hash for signature verification
         let auction_auth_hash = auction_auth.get_message_hash();
-        
-        // Debug logging for signature verification
-        let caller: felt252 = get_caller_address().try_into().unwrap();
-        let auctioneer: felt252 = auction.auctioneer.try_into().unwrap();
-        
-        // Verify the signature is from the auctioneer
-        let is_valid = check_ecdsa_signature(
-            auction_auth_hash,
-            get_caller_address().into(),
-            signature_r,
-            signature_s
-        );
+
+        // Verify the signature is from the auctioneer's account (SNIP-6 is_valid_signature,
+        // not raw ECDSA - an account's address is not its signing public key).
+        let auctioneer_response = ISRC6Dispatcher { contract_address: auction.auctioneer }
+            .is_valid_signature(auction_auth_hash, array![signature_r, signature_s]);
+        let is_valid = auctioneer_response == starknet::VALIDATED || auctioneer_response == 1;
         assert(is_valid, 'Invalid signature');
 
         // Check auction deadline
@@ -395,15 +394,13 @@ pub mod ScarabSign {
                 let bid_nonce_used = self.used_nonces.read((bid.bidder, bid.nonce.into()));
                 
                 if !bid_nonce_used {
-                    // Verify bid signature
+                    // Verify bid signature against the bidder's account (SNIP-6
+                    // is_valid_signature, not raw ECDSA - see the auctioneer check above).
                     let bid_hash = bid.get_message_hash();
-                    
-                    let is_valid = check_ecdsa_signature(
-                        bid_hash,
-                        bid.bidder.into(),
-                        bid_sig.r,  // r component
-                        bid_sig.s   // s component
-                    );
+
+                    let bidder_response = ISRC6Dispatcher { contract_address: bid.bidder }
+                        .is_valid_signature(bid_hash, array![bid_sig.r, bid_sig.s]);
+                    let is_valid = bidder_response == starknet::VALIDATED || bidder_response == 1;
 
                     if is_valid {
                         // Add to valid bids array

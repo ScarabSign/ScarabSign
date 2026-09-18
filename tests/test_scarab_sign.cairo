@@ -11,7 +11,7 @@ mod test_scarab_sign {
     use starknet::{get_caller_address};
     
     use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
-    use snforge_std::{start_cheat_caller_address_global};
+    use snforge_std::{start_cheat_caller_address_global, start_cheat_chain_id_global};
     use snforge_std::signature::KeyPairTrait;
     use snforge_std::signature::stark_curve::{StarkCurveKeyPairImpl, StarkCurveSignerImpl, StarkCurveVerifierImpl};
     use scarab_sign::snip_12::{IStructHash, IOffChainMessageHash};
@@ -254,6 +254,10 @@ mod test_scarab_sign {
         let token_amount = TokenAmount { token_address, amount };
         let bid = Bid { bidder, amount: token_amount, nonce, auction_sig_hash };
 
+        // get_message_hash reads the chain_id from get_tx_info(), so pin it to match
+        // the domain built manually below.
+        start_cheat_chain_id_global(KATANA_CHAIN_ID);
+
         // Get message hash
         let hash = IOffChainMessageHash::<Bid>::get_message_hash(@bid);
 
@@ -281,7 +285,10 @@ mod test_scarab_sign {
         
         // Set the caller address to match the auctioneer
         start_cheat_caller_address_global(auctioneer);
-        
+        // get_message_hash reads the chain_id from get_tx_info(), so pin it to match
+        // the domain built manually below.
+        start_cheat_chain_id_global(KATANA_CHAIN_ID);
+
         let auctioneer_nonce = 456_u64;
         let collection_address = starknet::contract_address_const::<0x789>();
         let nft_id = 123_u256;
@@ -323,7 +330,8 @@ mod test_scarab_sign {
         let mut state = PoseidonTrait::new();
         state = state.update_with(AUCTION_TYPE_HASH);
         state = state.update_with(domain.get_struct_hash());
-        state = state.update_with(get_caller_address());
+        let auctioneer_felt: felt252 = auction.auctioneer.into();
+        state = state.update_with(auctioneer_felt);
         state = state.update_with(IStructHash::<Auction>::get_struct_hash(@auction));
         let expected_hash = state.finalize();
 
@@ -450,11 +458,18 @@ mod test_scarab_sign {
         assert(contract_address != zero_address, 'deployment failed');
     }
 
+     // KNOWN FAILING as of this commit, needs a follow-up fix: consume_auction now checks
+     // signatures via ISRC6Dispatcher.is_valid_signature against `auctioneer`/`bidder`, which
+     // must be real deployed account contracts - unlike raw ECDSA, an account's address is not
+     // its signing public key. So both roles are backed by a real MockAccount (OpenZeppelin's
+     // AccountComponent) deployed with the keypair's public key as owner, instead of casting
+     // the raw public key straight to a ContractAddress the way the pre-fix version did.
      #[test]
     fn test_consume_auction() {
         let erc20 = declare("MockERC20").unwrap().contract_class();
         let erc721 = declare("MockERC721").unwrap().contract_class();
         let scarab_sign = declare("ScarabSign").unwrap().contract_class();
+        let account = declare("MockAccount").unwrap().contract_class();
 
         let constructor_calldata: Array<felt252> = ArrayTrait::new();
         let (erc20_address, _) = erc20.deploy(@constructor_calldata).unwrap();
@@ -466,12 +481,12 @@ mod test_scarab_sign {
         let mock_erc721_dispatcher = IMockERC721Dispatcher { contract_address: erc721_address };
         let erc721_dispatcher = IERC721Dispatcher { contract_address: erc721_address };
         let scarab_sign_dispatcher = IScarabSignDispatcher { contract_address: scarab_sign_address };
-        
+
         let bidder_keypair = KeyPairTrait::<felt252, felt252>::generate();
         let auctioneer_keypair = KeyPairTrait::<felt252, felt252>::generate();
-        
-        let bidder: ContractAddress = bidder_keypair.public_key.try_into().unwrap();
-        let auctioneer: ContractAddress = auctioneer_keypair.public_key.try_into().unwrap();
+
+        let (bidder, _) = account.deploy(@array![bidder_keypair.public_key]).unwrap();
+        let (auctioneer, _) = account.deploy(@array![auctioneer_keypair.public_key]).unwrap();
 
         mock_erc20_dispatcher.mint(bidder, u256 { low: 1000_u128, high: 0_u128 });
         mock_erc721_dispatcher.mint(auctioneer, 0_u256);

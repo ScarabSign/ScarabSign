@@ -58,14 +58,17 @@ pub const TOKEN_AMOUNT_TYPE_HASH: felt252 =
 pub const NFT_ID_TYPE_HASH: felt252 = 
 	selector!("\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-pub const BID_TYPE_HASH: felt252 = 
-	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
+// Kept in sync with src/scarab_sign.cairo: "u64" and "felt252" are not SNIP-12 base
+// types (only "felt"/"u128" etc. are), so these must match the main contract's
+// (corrected) type-hash constants or a signature produced here won't verify.
+pub const BID_TYPE_HASH: felt252 =
+	selector!("\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"felt\",\"auction_sig_hash\":\"felt\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")");
 
-pub const AUCTION_TYPE_HASH: felt252 = 
-	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\",\"auction_sig_hash\":\"felt252\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt252*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"u64\",\"auction_sig_hash\":\"felt252\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+pub const AUCTION_TYPE_HASH: felt252 =
+	selector!("\"Auction\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"felt\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"felt\",\"auction_sig_hash\":\"felt\",\"bids\":\"Bid*\",\"bid_sigs\":\"felt*\")\"Bid\"(\"bidder\":\"ContractAddress\",\"amount\":\"TokenAmount\",\"nonce\":\"felt\",\"auction_sig_hash\":\"felt\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
-pub const AUCTION_AUTH_TYPE_HASH: felt252 = 
-    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"u64\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"u64\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
+pub const AUCTION_AUTH_TYPE_HASH: felt252 =
+    selector!("\"AuctionAuth\"(\"auctioneer\":\"ContractAddress\",\"auctioneer_nonce\":\"felt\",\"nft\":\"NftId\",\"min_bid\":\"TokenAmount\",\"deadline\":\"felt\")\"NftId\"(\"collection_address\":\"ContractAddress\",\"nft_id\":\"u256\")\"TokenAmount\"(\"token_address\":\"ContractAddress\",\"amount\":\"u256\")\"u256\"(\"low\":\"u128\",\"high\":\"u128\")");
 
 // Add Katana chain ID constant
 const KATANA_CHAIN_ID: felt252 = 0x4b4154414e41;
